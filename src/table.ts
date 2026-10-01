@@ -39,4 +39,11 @@ export function parseTable<K extends string>(stdout: string, spec: Spec<K>): { r
 }
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export const APP = 'https://app.refit.ai'
+// Which Refit this code runs against. The drawer on staging-app.refit.ai is staging; the popup, worker and tests
+// (no Refit hostname) are prod. Commands carry it as args.env, which the host maps to a Tabularis connection.
+export type Env = 'prod' | 'stag'
+export const ENV: Env = globalThis.location?.hostname === 'staging-app.refit.ai' ? 'stag' : 'prod'
+export const APP = ENV === 'stag' ? 'https://staging-app.refit.ai' : 'https://app.refit.ai'
+// Results are kept per environment: prod keeps the plain key names (the popup and badge read those), staging prefixes them.
+export const envKey = (env: string | undefined, key: string) => (env === 'stag' ? `stag.${key}` : key)
+export const DATA_KEYS = ['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'] as const

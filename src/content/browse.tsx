@@ -5,6 +5,7 @@ import type { Args, Command, Run } from '../api'
 import { runStatus } from '../term'
 import { BATCH, cleanQuery, sameQuery, toArgs, type Page } from '../projects'
 import { isRunning } from '../shared/store'
+import { ENV } from '../table'
 import { Icon, type IconName } from '../shared/icons'
 
 export type Exec = (command: Command, args?: Args) => void
@@ -15,13 +16,15 @@ function useDebounced<T>(value: T, ms = 300): T {
   return v
 }
 
+// A run belongs to a view when it's the same command, for this tab's environment, with the view's extra args.
 export const runMatches = (run: Run | undefined, command: Command, extra: Args = {}) =>
-  !!run && run.command === command && Object.entries(extra).every(([k, v]) => run.args?.[k] === v)
+  !!run && run.command === command && (run.args?.env ?? 'prod') === ENV && Object.entries(extra).every(([k, v]) => run.args?.[k] === v)
 
 // Fetches the first batch whenever the (debounced) query differs from the stored page's, and exposes "load more".
 export function useBrowse<Q extends { q: string } & Record<string, string>, T>({ page, query, command, extra = {}, run, ready, exec }: {
   page?: Page<T, Q>; query: Q; command: Command; extra?: Args; run?: Run; ready: boolean; exec: Exec
 }) {
+  extra = { ...extra, env: ENV } // every fetch goes to this tab's environment
   const wanted = useDebounced({ ...query, q: cleanQuery(query.q) })
   const asked = useRef('') // the last query we requested, so a re-render doesn't re-request it
   const key = JSON.stringify([command, extra, wanted])

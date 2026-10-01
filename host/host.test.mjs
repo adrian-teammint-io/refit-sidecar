@@ -1,10 +1,10 @@
 // node host/host.test.mjs: pure protocol checks, then the real relay (host.mjs) + server (server.mjs) with a test allowlist.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bindParams, buildArgv, decoder, encode, stripLeadingComments, takeChunks, toHex } from './protocol.mjs'
+import { bindParams, buildArgv, checkQuery, decoder, encode, stripLeadingComments, takeChunks, toHex, CONNECTIONS } from './protocol.mjs'
 
 // framing round trip, including a frame split across reads and two frames in one read
 const got = []
@@ -54,6 +54,28 @@ assert.throws(() => bindParams(q, { ...ok, offset: undefined }), /Missing offset
 assert.throws(() => bindParams('SELECT 1', { project_id: P }), /takes no project_id/)
 assert.equal(bindParams('SELECT 1'), 'SELECT 1')
 assert.equal(stripLeadingComments('-- a\n  -- b\nSELECT 1 -- c\n'), 'SELECT 1 -- c')
+
+// delete ids: UUIDs only, at most 100
+const Q = '0a1b2c3d-0000-4000-8000-000000000001'
+assert.equal(bindParams('IN (:ids)', { ids: `${P.toUpperCase()},${Q}` }), `IN ('${P}', '${Q}')`)
+assert.throws(() => bindParams('IN (:ids)', { ids: `${P},x') OR ('1'='1` }), /ids must be/)
+assert.throws(() => bindParams('IN (:ids)', { ids: '' }), /ids must be/)
+assert.throws(() => bindParams('IN (:ids)', { ids: Array(101).fill(P).join(',') }), /1-100/)
+
+// query guard: SELECTs everywhere; the one write only from its own file and only in its exact shape
+const del = bindParams(stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/delete-syncs.sql'), 'utf8')), { ids: `${P},${Q}` })
+assert.equal(checkQuery('sql/delete-syncs.sql', del), true)
+assert.equal(checkQuery('sql/projects.sql', 'WITH x AS (SELECT 1) SELECT * FROM x'), false)
+assert.throws(() => checkQuery('sql/projects.sql', del), /only a single SELECT/)
+assert.throws(() => checkQuery('sql/delete-syncs.sql', 'DELETE FROM sync_request'), /approved DELETE/)
+assert.throws(() => checkQuery('sql/delete-syncs.sql', "DELETE FROM sync_request WHERE status = 'FAIL' AND id IN (SELECT id FROM sync_request) RETURNING id"), /approved DELETE/)
+assert.throws(() => checkQuery('sql/delete-syncs.sql', `${del}; DELETE FROM project`), /single statement/)
+assert.throws(() => checkQuery('sql/projects.sql', 'SELECT 1; DROP TABLE x'), /single statement/)
+assert.deepEqual(Object.keys(CONNECTIONS), ['prod', 'stag'])
+for (const [name, spec] of Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, 'commands.json'), 'utf8')).commands)) {
+  assert.equal(spec.params.env?.pattern, 'prod|stag', `${name} takes env`)
+  assert.equal(spec.args[2], '{env}', `${name} passes env as the connection`)
+}
 
 // end to end: Chrome's side of host.mjs (the relay) -> unix socket -> server.mjs
 const dir = mkdtempSync(join(tmpdir(), 'refit-host-'))

@@ -75,6 +75,31 @@ export const PARAMS = {
     return `convert_from(decode('${v}', 'hex'), 'UTF8')`
   },
 }
+PARAMS.ids = v => { // sync_request ids to delete: 1-100 comma-separated UUIDs
+  const ids = v.split(',')
+  if (ids.length > 100 || !ids.every(id => UUID.test(id))) throw new Error('must be 1-100 comma-separated UUIDs')
+  return ids.map(id => `'${id.toLowerCase()}'`).join(', ')
+}
+
+// Tabularis connections by environment (ids from Tabularis's connections.json: REFIT_ PROD, REFIT_STAG). Commands
+// pass {env}; the drawer picks it from the page's hostname, so a page can only ever choose between these two.
+export const CONNECTIONS = { prod: 'ea7632d2-f563-4d45-80ba-22728c416a40', stag: '93cae3df-54d8-4672-8092-aa27c3d49f0d' }
+
+// The only writes tabularis-query.mjs will send, by SQL file, each with the exact shape its statement must have.
+// Everything else must be a single SELECT / WITH. Tabularis still asks for approval in its console before a write.
+export const WRITES = { 'sql/delete-syncs.sql': /^delete from sync_request where status = 'FAIL' and id in \('[0-9a-f-]{36}'(?:, '[0-9a-f-]{36}')*\) returning id$/i }
+
+// Throws unless `query` (already bound) is allowed for `sqlFile`. Returns true for an approved write.
+export function checkQuery(sqlFile, query) {
+  const q = query.trim().replace(/\s+/g, ' ')
+  if (/;\s*\S/.test(q)) throw new Error('only a single statement is allowed')
+  if (Object.hasOwn(WRITES, sqlFile)) {
+    if (!WRITES[sqlFile].test(q.replace(/;$/, ''))) throw new Error(`${sqlFile} must be exactly its approved DELETE`)
+    return true
+  }
+  if (!/^(select|with)\b/i.test(q)) throw new Error('only a single SELECT is allowed')
+  return false
+}
 const PLACEHOLDER = new RegExp(`(?<![:\\w]):(${Object.keys(PARAMS).join('|')})\\b`, 'g')
 
 // Every placeholder the SQL uses needs a valid value, and every value given must be used by the SQL.

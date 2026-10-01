@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Refit Sidecar",
   "version": "0.0.0",
-  "description": "Drawer for app.refit.ai that runs allowlisted local commands (failed sync_requests) through a native host.",
+  "description": "Drawer for app.refit.ai and staging-app.refit.ai that runs allowlisted local commands (failed sync_requests) through a native host.",
   "permissions": [
     "storage",
     "nativeMessaging"
@@ -29,7 +29,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://app.refit.ai/*"
+        "https://app.refit.ai/*",
+        "https://staging-app.refit.ai/*"
       ],
       "js": [
         "content.js"

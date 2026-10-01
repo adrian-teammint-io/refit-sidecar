@@ -1,16 +1,18 @@
-// Runs one fixed, read-only SQL file through Tabularis's MCP server (stdio JSON-RPC) and prints the result JSON
+// Runs one fixed SQL file through Tabularis's MCP server (stdio JSON-RPC) and prints the result JSON
 // ({columns, rows, truncated, pagination}) to stdout. Progress goes to stderr so the drawer's terminal shows it.
 // Tabularis holds the DB credentials, so this repo never sees them.
-// Usage: node tabularis-query.mjs <tabularis binary> <connection id> <sql file> <row limit> [--param value ...]
+// Usage: node tabularis-query.mjs <tabularis binary> <prod|stag> <sql file> <row limit> [--param value ...]
 // Params fill the SQL's typed placeholders through bindParams() (protocol.mjs); see PARAMS there for the types.
+// Only SELECTs, plus the writes listed in WRITES (protocol.mjs), which wait for approval in the Tabularis app.
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { bindParams, stripLeadingComments } from './protocol.mjs'
+import { bindParams, checkQuery, stripLeadingComments, CONNECTIONS } from './protocol.mjs'
 
-const [bin, connectionId, sqlFile, limit, ...rest] = process.argv.slice(2)
-const TIMEOUT_MS = 60_000
+const [bin, env, sqlFile, limit, ...rest] = process.argv.slice(2)
 const say = s => process.stderr.write(s + '\n')
 const refuse = msg => { say(`Refusing ${sqlFile}: ${msg}`); process.exit(2) }
+if (!Object.hasOwn(CONNECTIONS, env)) refuse(`unknown environment ${JSON.stringify(env)} (prod or stag)`)
+const connectionId = CONNECTIONS[env]
 
 const params = {}
 for (let i = 0; i < rest.length; i += 2) {
@@ -19,16 +21,22 @@ for (let i = 0; i < rest.length; i += 2) {
 }
 let query
 try { query = bindParams(stripLeadingComments(readFileSync(sqlFile, 'utf8')), params) } catch (e) { refuse(e.message) }
-// ponytail: belt-and-braces read-only check on a SQL file we wrote; a read-only DB role would be the real guard
-if (!/^(select|with)\b/i.test(query) || /;\s*\S/.test(query)) refuse('only a single SELECT is allowed')
+// ponytail: belt-and-braces check on SQL files we wrote; a read-only DB role would be the real guard
+let write
+try { write = checkQuery(sqlFile, query) } catch (e) { refuse(e.message) }
+// A write waits for someone to approve it in Tabularis, so give it longer.
+const TIMEOUT_MS = write ? 300_000 : 60_000
 
 const started = Date.now()
-const shown = Object.entries(params).map(([k, v]) => `${k}=${k === 'q' ? JSON.stringify(Buffer.from(v, 'hex').toString('utf8')) : v}`).join(' ')
-say(`$ tabularis --mcp  ·  run_query on ${connectionId}  ·  ${sqlFile}${shown ? `  ·  ${shown}` : ''}`)
+const shown = Object.entries(params).map(([k, v]) => `${k}=${k === 'q' ? JSON.stringify(Buffer.from(v, 'hex').toString('utf8')) : k === 'ids' ? `${v.split(',').length} ids` : v}`).join(' ')
+say(`$ tabularis --mcp  ·  run_query on ${env.toUpperCase()} (${connectionId})  ·  ${sqlFile}${shown ? `  ·  ${shown}` : ''}`)
+if (write) say(`WRITE on ${env.toUpperCase()}: approve it in the Tabularis app (waits up to ${TIMEOUT_MS / 60_000} min)`)
 const tab = spawn(bin, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'] })
 const tail = [] // last lines of Tabularis's own log, shown only if something goes wrong
 tab.stderr.setEncoding('utf8').on('data', d => { tail.push(...d.split('\n').filter(Boolean)); tail.splice(0, Math.max(0, tail.length - 20)) })
 tab.on('error', e => fail(`Could not start Tabularis (${bin}): ${e.message}`, 127))
+let answered = false
+tab.on('exit', (code, signal) => { if (!answered) fail(`Tabularis exited (${signal ?? code}) before answering`) })
 const timer = setTimeout(() => fail(`Timed out after ${TIMEOUT_MS / 1000}s`, 124), TIMEOUT_MS)
 process.on('SIGTERM', () => { tab.kill('SIGTERM'); say('Cancelled'); process.exit(143) })
 
@@ -65,6 +73,7 @@ function onReply(msg) {
     let rows = '?'
     try { rows = JSON.parse(text).rows.length } catch {}
     say(`${rows} row${rows === 1 ? '' : 's'} in ${Date.now() - started}ms`)
+    answered = true
     clearTimeout(timer)
     tab.kill()
     process.stdout.write(text + '\n', () => process.exit(0))

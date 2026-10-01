@@ -3,12 +3,14 @@ import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { runStatus } from '../term'
 import { togglePin, type Project, type ProjectsQuery } from '../projects'
+import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
 import { Terminal } from '../shared/Terminal'
 import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
 import { SettingsView } from './Settings'
-import { Home, FailedView, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type HomeTarget } from './views'
+import { FailedView } from './failed'
+import { Home, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type HomeTarget } from './views'
 import { useResize } from './resize'
 
 // A stack of views: Home lists the commands, each command opens its own view, Back pops.
@@ -78,13 +80,14 @@ export function App() {
     const full = pins?.[p.id] ?? projects?.rows.find(r => r.id === p.id) ?? p
     push({ kind: 'project', project: full })
   }
-  const pin = (p: Project) => chrome.storage.local.set({ pins: togglePin(pins ?? {}, p, Date.now()) })
+  const pin = (p: Project) => chrome.storage.local.set({ [envKey(ENV, 'pins')]: togglePin(pins ?? {}, p, Date.now()) })
 
   useEffect(() => {
     if (!run?.endedAt || run.id !== startedHere.current) return
     startedHere.current = undefined
     if (run.exit !== 0 || run.error) return flash(runStatus(run, Date.now()).label)
-    if (run.command === 'failed-syncs') flash(`${n} failed sync${n === 1 ? '' : 's'}`)
+    if (run.summary) flash(run.summary)
+    else if (run.command === 'failed-syncs') flash(`${n} failed sync${n === 1 ? '' : 's'}`)
   }, [run?.endedAt])
 
   useEffect(() => {
@@ -136,6 +139,7 @@ export function App() {
         <header className="head">
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
           <h1 title={title}>{title}</h1>
+          {ENV === 'stag' && <span className="env-chip" title="staging-app.refit.ai: every command runs on the REFIT_STAG database">STAG</span>}
           {view.kind !== 'output' && view.kind !== 'settings' && (
             <button className="icon-btn" aria-label="Output" title="Raw output of the last run" data-live={running} onClick={showOutput}><Icon d="terminal" /></button>
           )}

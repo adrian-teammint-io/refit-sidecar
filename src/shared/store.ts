@@ -5,26 +5,32 @@ import { call, type HostState, type Output, type Run } from '../api'
 import type { FailedSyncs } from '../failed-syncs'
 import { dropStalePages, type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins } from '../projects'
 import { DEFAULTS, type Settings } from '../themes'
+import { DATA_KEYS, ENV, envKey } from '../table'
 
 export type Store = {
   settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean
   failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
   connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins
 }
+// Results are per environment (envKey: staging's are stored as "stag.<key>"); settings, run and host are shared.
 const KEYS = {
-  local: ['settings', 'run', 'failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'],
+  local: ['settings', 'run', ...DATA_KEYS],
   session: ['host', 'output'],
 } as const
+const stored = (area: 'local' | 'session', k: string) => (area === 'local' && (DATA_KEYS as readonly string[]).includes(k) ? envKey(ENV, k) : k)
 
 export function useStore(): Store {
   const [s, set] = useState<Store>({ settings: DEFAULTS, loaded: false })
   useEffect(() => {
-    Promise.all([chrome.storage.local.get([...KEYS.local]), chrome.storage.session.get([...KEYS.session])]).then(([l, ss]) =>
-      set(p => ({ ...p, ...dropStalePages(l), ...ss, settings: { ...DEFAULTS, ...(l.settings as Settings) }, loaded: true })))
+    const read = (area: 'local' | 'session', got: Record<string, unknown>) => Object.fromEntries(KEYS[area].map(k => [k, got[stored(area, k)]]))
+    Promise.all([chrome.storage.local.get(KEYS.local.map(k => stored('local', k))), chrome.storage.session.get([...KEYS.session])]).then(([l, ss]) => {
+      const local = read('local', l)
+      set(p => ({ ...p, ...dropStalePages(local), ...ss, settings: { ...DEFAULTS, ...(local.settings as Settings) }, loaded: true }))
+    })
     const on = (c: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local' && area !== 'session') return
       const next: Partial<Store> = {}
-      for (const k of KEYS[area] as readonly string[]) if (c[k]) (next as Record<string, unknown>)[k] = c[k].newValue
+      for (const k of KEYS[area] as readonly string[]) { const sk = stored(area, k); if (c[sk]) (next as Record<string, unknown>)[k] = c[sk].newValue }
       if (next.settings) next.settings = { ...DEFAULTS, ...next.settings }
       if (Object.keys(next).length) set(p => ({ ...p, ...dropStalePages(next) }))
     }

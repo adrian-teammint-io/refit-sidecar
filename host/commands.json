@@ -5,11 +5,16 @@
       "args": [
         "tabularis-query.mjs",
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
-        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "{env}",
         "sql/failed-syncs.sql",
         "500"
       ],
-      "params": {},
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        }
+      },
       "timeoutMs": 90000
     },
     "projects": {
@@ -17,7 +22,7 @@
       "args": [
         "tabularis-query.mjs",
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
-        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "{env}",
         "sql/projects.sql",
         "100",
         "--q",
@@ -30,6 +35,10 @@
         "{offset}"
       ],
       "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
         "q": {
           "pattern": "(?:[0-9a-f]{2}){0,200}",
           "default": ""
@@ -54,7 +63,7 @@
       "args": [
         "tabularis-query.mjs",
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
-        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "{env}",
         "sql/project-connections.sql",
         "100",
         "--project_id",
@@ -67,6 +76,10 @@
         "{offset}"
       ],
       "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
         "project": {
           "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
         },
@@ -90,7 +103,7 @@
       "args": [
         "tabularis-query.mjs",
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
-        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "{env}",
         "sql/connections.sql",
         "100",
         "--q",
@@ -99,6 +112,10 @@
         "{offset}"
       ],
       "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
         "q": {
           "pattern": "(?:[0-9a-f]{2}){0,200}",
           "default": ""
@@ -115,7 +132,7 @@
       "args": [
         "tabularis-query.mjs",
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
-        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "{env}",
         "sql/fitting-rooms.sql",
         "100",
         "--q",
@@ -124,6 +141,10 @@
         "{offset}"
       ],
       "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
         "q": {
           "pattern": "(?:[0-9a-f]{2}){0,200}",
           "default": ""
@@ -134,6 +155,28 @@
         }
       },
       "timeoutMs": 90000
+    },
+    "delete-syncs": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/delete-syncs.sql",
+        "100",
+        "--ids",
+        "{ids}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "ids": {
+          "pattern": "[0-9a-fA-F-]{36}(?:,[0-9a-fA-F-]{36}){0,99}"
+        }
+      },
+      "timeoutMs": 330000
     }
   }
 }

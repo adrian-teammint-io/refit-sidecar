@@ -4,6 +4,7 @@
 import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
+import { DATA_KEYS, envKey } from './table'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
@@ -58,10 +59,12 @@ export function connect() {
 // One command runs at a time. While one runs, the newest request waits (replacing any older waiting one), and a
 // request for the same command supersedes the running one: it is cancelled and its result thrown away, so typing
 // in a search box never waits behind a stale query.
+// A delete never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
 export function startRun(command: Command, args: Args = {}): string {
+  if (current && command === 'delete-syncs') throw new Error(`Busy: wait for ${current.run.command} to finish, then delete again`)
   if (current) {
     pending = { command, args }
-    if (current.run.command === command && !current.superseded) {
+    if (current.run.command === command && current.run.args?.env === args.env && command !== 'delete-syncs' && !current.superseded) {
       current.superseded = true
       port?.postMessage({ id: current.run.id, type: 'cancel' })
     }
@@ -136,7 +139,9 @@ async function finish(end: Pick<Run, 'exit' | 'signal' | 'error'>) {
   clearTimeout(flushTimer)
   flushTimer = undefined
   await chrome.storage.session.set({ output: c.out })
-  if (!c.superseded) await storeResult(run, c.stdout)
+  const r = c.superseded ? undefined : await storeResult(run, c.stdout)
+  if (r?.summary) run.summary = r.summary
+  if (r?.then && !pending) pending = r.then
   await chrome.storage.local.set({ run })
   const next = pending
   pending = undefined
@@ -151,15 +156,35 @@ function outcome<T extends { error?: string }>(prev: T | undefined, empty: T, ru
   return { ...(prev ?? empty), error: run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit}). See Output.`) }
 }
 
-async function storeResult(run: Run, stdout: string) {
+// Writes the run's result under its environment's keys (envKey). May return a one-line summary for the run and a
+// follow-up request (after a delete it can't account for row by row: fetch the failed list again).
+async function storeResult(run: Run, stdout: string): Promise<{ summary?: string; then?: { command: Command; args: Args } } | void> {
   const at = Date.now()
   const offset = Number(run.args?.offset ?? 0)
-  const s = dropStalePages(await chrome.storage.local.get(['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'])) as {
+  const env = run.args?.env
+  const got = await chrome.storage.local.get(DATA_KEYS.map(k => envKey(env, k)))
+  const s = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]]))) as {
     failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins
+  }
+  const save = (o: Record<string, unknown>) => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
+  if (run.command === 'delete-syncs') {
+    if (run.exit !== 0 || run.error) return
+    const asked = (run.args?.ids ?? '').toLowerCase().split(',')
+    let gone: string[] = [], affected = 0
+    try {
+      const t = JSON.parse(stdout) as { rows?: unknown[][]; affected_rows?: number }
+      gone = (t.rows ?? []).map(r => String(r[0]).toLowerCase())
+      affected = gone.length || (t.affected_rows ?? 0)
+    } catch { return { summary: 'Delete finished; could not read the result', then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } } }
+    const summary = `Deleted ${affected} of ${asked.length} sync request${asked.length === 1 ? '' : 's'}`
+    // RETURNING id lists exactly what went; drop those rows. Without it, re-fetch rather than guess.
+    if (!gone.length) return { summary, then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } }
+    if (s.failedSyncs) await save({ failedSyncs: { ...s.failedSyncs, rows: s.failedSyncs.rows.filter(r => !gone.includes(r.id.toLowerCase())) } })
+    return { summary }
   }
   if (run.command === 'failed-syncs') {
     const next = outcome<FailedSyncs>(s.failedSyncs, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))
-    return chrome.storage.local.set({ failedSyncs: next })
+    return save({ failedSyncs: next })
   }
   // Browse commands: a page per query; "load more" runs append to it (mergePage).
   const empty = <Q>(query: Q) => ({ at, runId: run.id, query, rows: [], hasMore: false })
@@ -167,24 +192,24 @@ async function storeResult(run: Run, stdout: string) {
     const query = queryOf<ProjectsQuery>(run.args, ['q', 'status', 'sort'])
     const next = outcome<Projects>(s.projects, empty(query), run, () => mergePage(s.projects, query, offset, parseProjects(stdout), at, run.id, p => p.id))
     const pins = s.pins && refreshPins(s.pins, next.rows)
-    return chrome.storage.local.set(pins ? { projects: next, pins } as Record<string, unknown> : { projects: next })
+    return save(pins ? { projects: next, pins } as Record<string, unknown> : { projects: next })
   }
   if (run.command === 'project-connections' && run.args?.project) {
     const id = run.args.project
     const cache = s.projectConnections ?? {}
     const query = queryOf<ConnectionsQuery>(run.args, ['q', 'sort'])
     const next = outcome<ProjectConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
-    return chrome.storage.local.set({ projectConnections: cacheProject(cache, id, next) })
+    return save({ projectConnections: cacheProject(cache, id, next) })
   }
   if (run.command === 'connections') {
     const query = queryOf<TextQuery>(run.args, ['q'])
     const next = outcome<Connections>(s.connections, empty(query), run, () => mergePage(s.connections, query, offset, parseConnections(stdout), at, run.id, c => c.connectionId))
-    return chrome.storage.local.set({ connections: next })
+    return save({ connections: next })
   }
   if (run.command === 'fitting-rooms') {
     const query = queryOf<TextQuery>(run.args, ['q'])
     const next = outcome<FittingRooms>(s.fittingRooms, empty(query), run, () => mergePage(s.fittingRooms, query, offset, parseFittingRooms(stdout), at, run.id, r => r.id))
-    return chrome.storage.local.set({ fittingRooms: next })
+    return save({ fittingRooms: next })
   }
 }
 

@@ -2,19 +2,18 @@
 // Browse views fetch in batches of BATCH: typing re-queries the server (debounced), "Load more" fetches the next batch.
 import { useState } from 'react'
 import type { Run } from '../api'
-import { ago, runStatus } from '../term'
+import { ago } from '../term'
 import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, type FailedSyncs } from '../failed-syncs'
 import {
   pinnedFor, type Project, type ProjectConnection, type ConnectionHit, type FittingRoom, type Pins,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery,
 } from '../projects'
-import { isRunning } from '../shared/store'
 import { Icon, type IconName } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { SyncList } from '../shared/SyncList'
-import { Browse, Empty, ErrorBanner, SearchBox, Skeleton, useBrowse, type Exec } from './browse'
+import { ENV } from '../table'
+import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
 export type { Exec } from './browse'
-type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void; showOutput: () => void }
+export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void; showOutput: () => void }
 type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 
 // ---------- Home: the command list ----------
@@ -56,34 +55,7 @@ export function Home({ pins, failedSyncs: fs, now, open, openProject }: {
           <li key={p.id}><button className="proj" onClick={() => openProject(p)}><Icon d="pin" size={14} /><span className="proj-main"><strong>{p.name}</strong></span>{p.failed > 0 && <span className="count-chip">{p.failed}</span>}<Icon d="chevron" /></button></li>
         ))}</ul>
       </>}
-      <p className="hint muted">Each command runs in your <code>pnpm server</code> terminal against prod (read-only, through Tabularis).</p>
-    </div>
-  )
-}
-
-// ---------- Failed syncs ----------
-
-export function FailedView({ fs, run, now, exec, cancel, showOutput }: { fs?: FailedSyncs } & Common) {
-  const n = fs?.rows.length ?? 0
-  const mine = isRunning(run) && run!.command === 'failed-syncs'
-  const st = run && !isRunning(run) && run.command === 'failed-syncs' ? runStatus(run, now) : undefined
-  return (
-    <div className="pane">
-      <div className="runbar">
-        <span className="muted">{mine ? 'Running failed-syncs…' : fs?.at ? `${n} failed · updated ${ago(fs.at, now)}` : 'Not fetched yet'}</span>
-        <span className="spacer" />
-        {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
-        {mine
-          ? <button className="btn ghost sm" onClick={cancel}><Icon d="stop" size={13} />Cancel</button>
-          : <button className="btn primary sm" onClick={() => exec('failed-syncs')}><Icon d="play" size={13} />Fetch FAIL syncs</button>}
-      </div>
-      <ErrorBanner error={fs?.error} hasRows={!!n} onOutput={showOutput} />
-      {!fs ? (mine ? <Skeleton rows={3} /> : <Empty icon="terminal" title="No results yet" text={<><b>Fetch FAIL syncs</b> runs <code>failed-syncs</code> in your <code>pnpm server</code> terminal and lists every prod sync_request with status FAIL.</>} />)
-        : !n && !fs.error ? <Empty icon="check" title="No failed syncs" text="No sync_request on prod has status FAIL." />
-        : <>
-            <SyncList rows={fs.rows} now={now} />
-            {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older failures were cut by the query limit.</p>}
-          </>}
+      <p className="hint muted">Each command runs in your <code>pnpm server</code> terminal against {ENV === 'stag' ? 'staging (REFIT_STAG)' : 'prod'} through Tabularis. Only Delete on Failed syncs writes.</p>
     </div>
   )
 }

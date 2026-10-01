@@ -58,7 +58,8 @@ const connRows = [
 // many: 30 rows + hasMore (shows "Load 30 more"). sort=service in the hash: the project's connections grouped by service.
 const MANY = MODE === 'many'
 const BY_SERVICE = /sort=service/.test(Q)
-const page = (runId, query, rows) => ({ at: now - 300000, runId, query, rows, hasMore: MANY })
+// legacy flag: pages as the previous version stored them (no query / hasMore), to check old storage still renders.
+const page = (runId, query, rows) => /legacy/.test(Q) ? { at: now - 300000, runId, rows } : { at: now - 300000, runId, query, rows, hasMore: MANY }
 const fill = (rows, make) => MANY ? Array.from({ length: 30 }, (_, i) => make(rows[i % rows.length], i)) : rows
 const allProjects = fill(projectRows, (p, i) => ({ ...p, id: uuid(900 + i), name: i < projectRows.length ? p.name : `${p.name} ${i}` }))
 const sortedConns = BY_SERVICE ? [...connRows].sort((a, b) => (a.service ?? a.kind).localeCompare(b.service ?? b.kind) || a.name.localeCompare(b.name)) : connRows

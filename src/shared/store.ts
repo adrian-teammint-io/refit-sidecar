@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { call, type HostState, type Output, type Run } from '../api'
 import type { FailedSyncs } from '../failed-syncs'
-import type { Projects, ProjectConnections, Connections, FittingRooms, Pins } from '../projects'
+import { dropStalePages, type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins } from '../projects'
 import { DEFAULTS, type Settings } from '../themes'
 
 export type Store = {
@@ -20,13 +20,13 @@ export function useStore(): Store {
   const [s, set] = useState<Store>({ settings: DEFAULTS, loaded: false })
   useEffect(() => {
     Promise.all([chrome.storage.local.get([...KEYS.local]), chrome.storage.session.get([...KEYS.session])]).then(([l, ss]) =>
-      set(p => ({ ...p, ...l, ...ss, settings: { ...DEFAULTS, ...(l.settings as Settings) }, loaded: true })))
+      set(p => ({ ...p, ...dropStalePages(l), ...ss, settings: { ...DEFAULTS, ...(l.settings as Settings) }, loaded: true })))
     const on = (c: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local' && area !== 'session') return
       const next: Partial<Store> = {}
       for (const k of KEYS[area] as readonly string[]) if (c[k]) (next as Record<string, unknown>)[k] = c[k].newValue
       if (next.settings) next.settings = { ...DEFAULTS, ...next.settings }
-      if (Object.keys(next).length) set(p => ({ ...p, ...next }))
+      if (Object.keys(next).length) set(p => ({ ...p, ...dropStalePages(next) }))
     }
     chrome.storage.onChanged.addListener(on)
     call({ type: 'hostStatus' }).catch(() => {})

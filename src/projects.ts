@@ -132,6 +132,17 @@ export function mergePage<T, Q extends object>(prev: Page<T, Q> | undefined, que
   return { at, runId, query, rows, hasMore }
 }
 
+// Pages saved before batching (83c25cc) have no query, and every reader assumes one. Treat them as never fetched,
+// so the view fetches a fresh page. Applied wherever storage is read (store.ts, host.ts).
+const isPage = (p: unknown) => !!p && typeof p === 'object' && 'query' in p && 'rows' in p
+export function dropStalePages<S extends object>(s: S): S {
+  const out = { ...s } as Record<string, unknown>
+  for (const k of ['projects', 'connections', 'fittingRooms']) if (out[k] !== undefined && !isPage(out[k])) delete out[k]
+  if (out.projectConnections && typeof out.projectConnections === 'object')
+    out.projectConnections = Object.fromEntries(Object.entries(out.projectConnections).filter(([, p]) => isPage(p)))
+  return out as S
+}
+
 // Most cached projects kept in storage; the oldest fetch is dropped first.
 export const MAX_CACHED_PROJECTS = 30 // ponytail: ~30 KB each; raise if you browse many projects a day
 

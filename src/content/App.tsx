@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { runStatus } from '../term'
@@ -26,6 +26,20 @@ type View =
 const TITLES: Record<View['kind'], string> = {
   home: 'Refit Sidecar', failed: 'Failed syncs', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
   project: '', output: 'Output', settings: 'Settings',
+}
+
+// A render error in one view shows here instead of unmounting the whole drawer (and launcher). Keyed by view, so Back clears it.
+class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
+  state: { error?: Error } = {}
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="pane">
+        <div className="banner" role="alert"><Icon d="alert" /><span>This view crashed: {this.state.error.message}. Press Back to go on.</span></div>
+      </div>
+    )
+  }
 }
 
 export function App() {
@@ -128,7 +142,7 @@ export function App() {
           {view.kind !== 'settings' && <IconBtn icon="gear" label="Settings" onClick={() => push({ kind: 'settings' })} />}
           <IconBtn icon="x" label="Close" onClick={() => setOpen(false)} />
         </header>
-        <div className="body">{body}</div>
+        <div className="body"><ViewBoundary key={`${stack.length}-${view.kind}`}>{body}</ViewBoundary></div>
         <footer className="foot">
           {host && <span className="pill" data-tone={hostTone(host)}>{hostLabel(host)}</span>}
           <span className="spacer" />

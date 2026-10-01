@@ -5,7 +5,7 @@ import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
 import {
-  parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, mergePage, cacheProject, queryOf, refreshPins,
+  parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
 } from './projects'
 
@@ -154,7 +154,7 @@ function outcome<T extends { error?: string }>(prev: T | undefined, empty: T, ru
 async function storeResult(run: Run, stdout: string) {
   const at = Date.now()
   const offset = Number(run.args?.offset ?? 0)
-  const s = (await chrome.storage.local.get(['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'])) as {
+  const s = dropStalePages(await chrome.storage.local.get(['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'])) as {
     failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins
   }
   if (run.command === 'failed-syncs') {

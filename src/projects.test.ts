@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, toHex, fromHex, cleanQuery, toArgs, queryOf,
-  mergePage, cacheProject, togglePin, refreshPins, pinnedFor, BATCH, MAX_CACHED_PROJECTS, type Project, type ProjectsQuery,
+  mergePage, cacheProject, togglePin, refreshPins, pinnedFor, dropStalePages, BATCH, MAX_CACHED_PROJECTS, type Project, type ProjectsQuery,
 } from './projects.ts'
 import { connectionUrl, projectUrl, fittingRoomUrl } from './failed-syncs.ts'
 
@@ -64,6 +64,16 @@ const other = mergePage(page, { ...query, q: 'x' }, BATCH, range(0, 2), 3, 'r3',
 assert.equal(other.rows.length, 2)
 const stale = mergePage(page, query, 10, range(10, 12), 4, 'r4', id) // offset doesn't line up: replace
 assert.equal(stale.rows.length, 2)
+
+// pages stored by the pre-batching version (no query) are dropped; current pages and other keys pass through
+const legacy = { at: 1, runId: 'old', rows: [P(1)] }
+const cur = mergePage(undefined, query, 0, range(0, 2), 1, 'a', id)
+const cleaned = dropStalePages({ projects: legacy, connections: cur, failedSyncs: legacy, projectConnections: { a: legacy, b: cur } })
+assert.equal(cleaned.projects, undefined)
+assert.equal(cleaned.connections, cur)
+assert.equal(cleaned.failedSyncs, legacy)
+assert.deepEqual(Object.keys(cleaned.projectConnections), ['b'])
+assert.deepEqual(dropStalePages({ run: 1 }), { run: 1 })
 
 // cache keeps the newest MAX_CACHED_PROJECTS
 let cache: Record<string, { at: number }> = {}

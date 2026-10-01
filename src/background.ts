@@ -32,7 +32,7 @@ async function paint() {
   await chrome.action.setBadgeText({ text: !on ? '' : hostBad ? '!' : n ? String(n > 999 ? '999+' : n) : '' })
   await chrome.action.setBadgeBackgroundColor({ color: hostBad ? '#f59e0b' : '#dc2626' })
   await chrome.action.setBadgeTextColor({ color: '#ffffff' })
-  await chrome.action.setTitle({ title: hostBad ? 'Refit Sidecar: host not installed' : `Refit Sidecar: ${n} failed sync${n === 1 ? '' : 's'}` })
+  await chrome.action.setTitle({ title: hostBad ? 'Refit Sidecar: host not installed' : host?.state === 'offline' ? 'Refit Sidecar: run pnpm server in a terminal' : `Refit Sidecar: ${n} failed sync${n === 1 ? '' : 's'}` })
 }
 
 chrome.storage.onChanged.addListener(c => { if (c.failedSyncs || c.host || c.settings) paint() })

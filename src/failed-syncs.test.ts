@@ -36,12 +36,16 @@ assert.equal(dateRange(file.rows[0]), '2026-09-01')
 assert.match(connectionUrl(file.rows[0])!, /\/datasources\/file\/1111/)
 assert.equal(parseFailedSyncs(JSON.stringify({ columns: cols, rows: [] })).rows.length, 0)
 
+// Captured from a real run with no FAIL rows (2026-10-01): Tabularis drops the column list when nothing matched.
+const empty = readFileSync(new URL('./samples/failed-syncs.empty.stdout.txt', import.meta.url), 'utf8')
+assert.deepEqual(parseFailedSyncs(empty), { rows: [], truncated: false })
+
 // a URL is only built from UUID-shaped ids
 assert.equal(connectionUrl({ ...rows[0], projectId: '../../evil' }), undefined)
 assert.equal(connectionUrl({ ...rows[0], kind: 'OTHER' }), undefined)
 
 assert.throws(() => parseFailedSyncs('$ tabularis --mcp'), /not JSON/)
-assert.throws(() => parseFailedSyncs('{"columns":["id"],"rows":[]}'), /Missing column: connection_id/)
+assert.throws(() => parseFailedSyncs('{"columns":["id"],"rows":[["x"]]}'), /Missing column: connection_id/)
 assert.throws(() => parseFailedSyncs(JSON.stringify({ columns: cols, rows: [[...fileRow.slice(0, 1), null, ...fileRow.slice(2)]] })), /id is null/)
 assert.throws(() => parseFailedSyncs(JSON.stringify({ columns: cols, rows: ['x'] })), /not an array/)
 console.log('failed-syncs ok')

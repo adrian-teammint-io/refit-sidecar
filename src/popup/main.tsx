@@ -12,7 +12,7 @@ import { Icon, IconBtn } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { Terminal } from '../shared/Terminal'
 import { SyncList } from '../shared/SyncList'
-import { HostSetup, hostProblem } from '../shared/HostSetup'
+import { HostSetup, hostProblem, hostLabel } from '../shared/HostSetup'
 import { PopupSettings } from './PopupSettings'
 
 const SHOWN = 4 // rows that fit under 600px; the drawer lists the rest
@@ -44,7 +44,7 @@ function Popup() {
         <h1>{view === 'settings' ? 'Settings' : 'Refit failed syncs'}</h1>
         {view !== 'settings' && <>
           <span className="muted p-updated">{running ? 'Running…' : fs?.at ? `Updated ${ago(fs.at, now)}` : ''}</span>
-          <IconBtn icon="refresh" label={running ? 'Running…' : 'Run failed-syncs'} onClick={runIt} disabled={running} spin={running} />
+          <IconBtn icon="refresh" label={running ? 'Running…' : 'Fetch FAIL syncs'} onClick={runIt} disabled={running} spin={running} />
           <IconBtn icon="gear" label="Settings" onClick={() => setView('settings')} />
         </>}
       </header>
@@ -66,7 +66,7 @@ function Popup() {
               {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
               {running
                 ? <button className="btn ghost" onClick={cancel}><Icon d="stop" size={14} />Cancel</button>
-                : <button className="btn primary" onClick={runIt}><Icon d="play" size={14} />Run</button>}
+                : <button className="btn primary" onClick={runIt}><Icon d="play" size={14} />Fetch</button>}
             </div>
           </article>
 
@@ -78,7 +78,7 @@ function Popup() {
             </div>
           )}
 
-          {!fs ? <p className="p-note muted">Not run yet. <b>Run</b> lists every sync_request with status FAIL, read through Tabularis.</p>
+          {!fs ? <p className="p-note muted">Not fetched yet. <b>Fetch</b> runs failed-syncs in your <code>pnpm server</code> terminal.</p>
             : !n ? <p className="p-note muted"><Icon d="check" size={14} /> No failed syncs.</p>
             : <SyncList rows={fs.rows} now={now} limit={SHOWN} newTab />}
           {n > SHOWN && (
@@ -89,7 +89,7 @@ function Popup() {
         </>}
 
         <footer className="p-foot muted">
-          <span>{host?.state === 'ready' ? 'Host ready' : host?.state === 'connecting' ? 'Connecting to host…' : 'Host unavailable'}</span>
+          <span>{hostLabel(host)}</span>
           <span>Tabularis · refit-prod</span>
         </footer>
       </>}

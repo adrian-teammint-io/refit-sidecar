@@ -5,7 +5,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
 WHAT=${1:-all}; shift
-MODES=${*:-results output never zero error missing settings many results-light settings-light}
+MODES=${*:-results output never zero error offline missing settings many results-light settings-light}
 S=$(mktemp -d)
 cp -R "$REPO/dist" "$S/x" && cp "$HERE/stub.js" "$HERE/mock.html" "$S/x/"
 sed -i '' 's|<head>|<head><script src="/stub.js"></script>|' "$S/x/popup.html"

@@ -1,5 +1,6 @@
-// Worker side of the native host: owns the one connectNative port, runs commands, buffers their output.
-// Surfaces never see the port. They read `host` / `output` (storage.session) and `run` / `failedSyncs` (storage.local).
+// Worker side of the native host: owns the one connectNative port (to the relay, host/host.mjs, which forwards to
+// `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
+// They read `host` / `output` (storage.session) and `run` / `failedSyncs` (storage.local).
 import type { Command, HostState, Output, Run } from './api'
 import { flushCarry, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
@@ -10,7 +11,8 @@ const MAX_STDOUT = 8 * 1024 * 1024 // ponytail: raw stdout kept for the parser; 
 const RETRY_MAX_MS = 60_000
 
 type HostMsg =
-  | { id: string; hello: { commands: string[]; log: string } }
+  | { id: 'status'; server: 'up' | 'down' } // from the relay, whenever the terminal server comes or goes
+  | { id: string; hello: { commands: string[] } }
   | { id: string; stream: 'stdout' | 'stderr'; chunk: string }
   | { id: string; exit: number; signal?: string; ms: number }
   | { id: string; error: string }
@@ -44,8 +46,7 @@ export function connect() {
     retryMs = Math.min(retryMs * 2, RETRY_MAX_MS)
     setHost({ state: 'down', error, retryAt })
   })
-  p.postMessage({ id: 'hello', type: 'hello' })
-  return p
+  return p // the relay reports server status on its own; hello follows once the server is up
 }
 
 export function startRun(command: Command): string {
@@ -71,8 +72,17 @@ export function cancelRun() {
 }
 
 function onMessage(m: HostMsg) {
+  if ('server' in m) {
+    retryMs = 1000 // the relay is alive
+    if (m.server === 'up') port?.postMessage({ id: 'hello', type: 'hello' })
+    else {
+      if (current) finish({ error: 'Server stopped. Start it again with `pnpm server`.' })
+      setHost({ state: 'offline' })
+    }
+    return
+  }
   if (m.id === 'hello') {
-    if ('hello' in m) { retryMs = 1000; setHost({ state: 'ready', commands: m.hello.commands, log: m.hello.log }) }
+    if ('hello' in m) setHost({ state: 'ready', commands: m.hello.commands })
     else if ('error' in m) setHost({ state: 'down', error: m.error })
     return
   }

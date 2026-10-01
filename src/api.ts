@@ -12,7 +12,8 @@ export type Req =
 // chrome.storage.session `host`
 export type HostState =
   | { state: 'connecting' }
-  | { state: 'ready'; commands: string[]; log: string }
+  | { state: 'ready'; commands: string[] } // relay up and `pnpm server` running
+  | { state: 'offline' } // relay up, but no `pnpm server` in a terminal; flips to ready by itself when it starts
   | { state: 'missing'; error: string } // no manifest: install-host hasn't run
   | { state: 'forbidden'; error: string } // manifest is for another extension id
   | { state: 'down'; error: string; retryAt?: number } // host crashed or commands.json is broken

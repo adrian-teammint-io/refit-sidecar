@@ -1,9 +1,9 @@
 // Fake chrome.* for screenshots of the drawer (mock.html) and popup (popup.html), no extension needed.
 // State comes from the URL: mock.html#<mode> or popup.html?m=<mode>, plus "light" anywhere in it for Claude Paper light.
 // Modes: results (default), output (a run in progress), never (not run yet), zero (no failures), error (last run failed),
-//        missing (host not installed), forbidden, settings, many (30 rows: overflow/limit checks).
+//        offline (pnpm server not running), missing (host not installed), forbidden, settings, many (30 rows: overflow/limit checks).
 const Q = location.hash.slice(1) + '&' + location.search.slice(1)
-const MODE = (Q.match(/(?:^|[&?])m?=?(output|never|zero|error|missing|forbidden|settings|many|results)/) || [])[1] || 'results'
+const MODE = (Q.match(/(?:^|[&?])m?=?(output|never|zero|error|offline|missing|forbidden|settings|many|results)/) || [])[1] || 'results'
 const LIGHT = /light/.test(Q)
 const now = Date.now()
 const uuid = n => `${String(n).padStart(8, '0')}-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -29,9 +29,10 @@ const lines = [
 const running = MODE === 'output'
 const run = MODE === 'never' ? undefined : { id: 'r1', command: 'failed-syncs', startedAt: now - (running ? 3400 : 125000), ...(running ? {} : { endedAt: now - 124000, exit: MODE === 'error' ? 1 : 0 }) }
 const failedSyncs = MODE === 'never' ? undefined : { at: now - 124000, runId: 'r1', rows: MODE === 'zero' ? [] : rows, truncated: MODE === 'many', ...(MODE === 'error' ? { error: 'Command failed (exit 1). See Output.' } : {}) }
-const host = MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
+const host = MODE === 'offline' ? { state: 'offline' }
+  : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
-  : { state: 'ready', commands: ['failed-syncs'], log: '/Users/hoan/Library/Logs/refit-sidecar.log' }
+  : { state: 'ready', commands: ['failed-syncs'] }
 const local = { settings: LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }, run, failedSyncs }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).map(k => [k, data[k]]).filter(([, v]) => v !== undefined)), set: async () => {}, remove: async () => {} })

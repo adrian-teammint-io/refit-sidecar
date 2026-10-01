@@ -30,6 +30,8 @@ export function parseFailedSyncs(stdout: string): { rows: FailedSync[]; truncate
   let data: { columns?: unknown; rows?: unknown; truncated?: unknown; pagination?: { has_more?: unknown } }
   try { data = JSON.parse(stdout) } catch { throw new Error('Output is not JSON') }
   if (!Array.isArray(data?.columns) || !Array.isArray(data.rows)) throw new Error('Expected {columns, rows}')
+  const truncated = data.truncated === true || data.pagination?.has_more === true
+  if (!data.rows.length) return { rows: [], truncated } // Tabularis sends "columns": [] when nothing matched
   const cols = data.columns as unknown[]
   const at = Object.fromEntries(Object.entries(COLS).map(([k, c]) => {
     const i = cols.indexOf(c)
@@ -48,7 +50,7 @@ export function parseFailedSyncs(stdout: string): { rows: FailedSync[]; truncate
     }
     return row as FailedSync
   })
-  return { rows, truncated: data.truncated === true || data.pagination?.has_more === true }
+  return { rows, truncated }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

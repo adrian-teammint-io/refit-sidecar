@@ -7,7 +7,7 @@ import { Icon, IconBtn } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { Terminal } from '../shared/Terminal'
 import { SyncList } from '../shared/SyncList'
-import { HostSetup, hostProblem } from '../shared/HostSetup'
+import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
 import { SettingsView } from './Settings'
 
 type View = 'results' | 'output' | 'settings'
@@ -67,7 +67,7 @@ export function App() {
         {st && !running && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
         {running
           ? <button className="btn ghost" onClick={cancel}><Icon d="stop" size={14} />Cancel</button>
-          : <button className="btn primary" onClick={runIt}><Icon d="play" size={14} />Run</button>}
+          : <button className="btn primary" onClick={runIt}><Icon d="play" size={14} />Fetch FAIL syncs</button>}
       </div>
       {fs?.error && (
         <div className="banner" role="alert">
@@ -80,7 +80,7 @@ export function App() {
         <div className="empty">
           <div className="empty-icon"><Icon d="terminal" size={22} /></div>
           <h2>No results yet</h2>
-          <p>Run <code>failed-syncs</code> to list every sync_request with status FAIL on prod, read through Tabularis.</p>
+          <p><b>Fetch FAIL syncs</b> runs <code>failed-syncs</code> in your <code>pnpm server</code> terminal and lists every prod sync_request with status FAIL.</p>
         </div>
       ) : !n && !fs.error ? (
         <div className="empty">
@@ -97,8 +97,6 @@ export function App() {
     </div>
   )
 
-  const hostLabel = !host ? '' : host.state === 'ready' ? 'Host ready' : host.state === 'connecting' ? 'Connecting…' : host.state === 'missing' ? 'Host not installed' : host.state === 'forbidden' ? 'Host: wrong extension id' : 'Host down'
-  const hostTone = host?.state === 'ready' ? 'ok' : host?.state === 'connecting' ? 'run' : 'fail'
 
   return (
     <div className={`root ${dark ? 'dark' : 'light'}`} style={theme}>
@@ -111,7 +109,7 @@ export function App() {
         <header className="head">
           {view === 'settings' ? <IconBtn icon="back" label="Back" onClick={() => setView('results')} /> : <span className="mark"><Icon d="terminal" /></span>}
           <h1>{view === 'settings' ? 'Settings' : 'Failed syncs'}</h1>
-          {view !== 'settings' && <IconBtn icon="refresh" label={running ? 'Running…' : 'Run failed-syncs'} onClick={runIt} disabled={running} spin={running} />}
+          {view !== 'settings' && <IconBtn icon="refresh" label={running ? 'Running…' : 'Fetch FAIL syncs'} onClick={runIt} disabled={running} spin={running} />}
           {view !== 'settings' && <IconBtn icon="gear" label="Settings" onClick={() => setView('settings')} />}
           <IconBtn icon="x" label="Close" onClick={() => setOpen(false)} />
         </header>
@@ -122,7 +120,7 @@ export function App() {
         )}
         <div className="body">{body}</div>
         <footer className="foot">
-          {host && <span className="pill" data-tone={hostTone}>{hostLabel}</span>}
+          {host && <span className="pill" data-tone={hostTone(host)}>{hostLabel(host)}</span>}
           <span className="spacer" />
           <span><kbd>Esc</kbd> {view === 'settings' ? 'back' : 'close'}</span>
         </footer>

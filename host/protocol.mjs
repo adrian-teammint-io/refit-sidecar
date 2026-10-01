@@ -1,5 +1,10 @@
-// Pure helpers for the native host: Chrome's length-prefixed JSON framing, output chunking and argv building.
-// No I/O here so host.test.mjs can run it with plain node.
+// Pure helpers shared by the relay (host.mjs) and the server (server.mjs): length-prefixed JSON framing (Chrome's,
+// reused on the unix socket), output chunking and argv building. No I/O here so host.test.mjs can run it with plain node.
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+// Unix socket between the relay and the server. The env override is for host.test.mjs.
+export const SOCK = process.env.REFIT_SIDECAR_SOCK ?? join(homedir(), '.refit-sidecar.sock')
 
 // Chrome caps host -> extension messages at 1 MB of UTF-8 JSON. 64K chars stays far under it even if every
 // char is JSON-escaped (\u0000 is 6 bytes, 64K * 6 = 384 KB).

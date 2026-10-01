@@ -18,10 +18,11 @@ function Options() {
     <main className={`root ${dark ? 'dark' : 'light'} page`} style={theme as React.CSSProperties}>
       <div className="card">
         <h1>Refit Sidecar</h1>
-        <p className="muted">The drawer on app.refit.ai runs allowlisted commands on this Mac through a native messaging host
-          (<code>host/</code> in the repo). The extension never sees database credentials: queries go through the Tabularis app.</p>
+        <p className="muted">The drawer on app.refit.ai runs allowlisted commands in a terminal you keep open (<code>pnpm server</code>).
+          Chrome reaches it through a small native messaging relay over a unix socket. The extension never sees database credentials:
+          queries go through the Tabularis app.</p>
         <HostCard host={host} />
-        {host?.state !== 'ready' && <HostSetup host={host} />}
+        {host?.state !== 'ready' && host?.state !== 'connecting' && <HostSetup host={host} />}
         <p className="hint muted">Extension id <code>{chrome.runtime.id}</code>. It changes if the unpacked folder moves; run install-host again if it does.
           To remove the host: <code>pnpm uninstall-host</code>.</p>
       </div>

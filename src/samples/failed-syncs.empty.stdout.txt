@@ -1,0 +1,12 @@
+{
+  "columns": [],
+  "rows": [],
+  "affected_rows": 0,
+  "truncated": false,
+  "pagination": {
+    "page": 1,
+    "page_size": 500,
+    "total_rows": null,
+    "has_more": false
+  }
+}

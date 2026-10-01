@@ -38,4 +38,4 @@ writeFileSync(MANIFEST, JSON.stringify({
   type: 'stdio',
   allowed_origins: [`chrome-extension://${id}/`],
 }, null, 2) + '\n')
-console.log(`Wrote ${MANIFEST}\nWrote ${WRAPPER} (node at ${NODE})\nReload the extension, then open app.refit.ai. Log: ~/Library/Logs/refit-sidecar.log`)
+console.log(`Wrote ${MANIFEST}\nWrote ${WRAPPER} (node at ${NODE})\nNow start the server with pnpm server (keep that terminal open), then open app.refit.ai.`)

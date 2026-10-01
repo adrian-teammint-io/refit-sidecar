@@ -1,7 +1,7 @@
-// node host/host.test.mjs: pure protocol checks, then the real host.mjs driven over stdio with a test allowlist.
+// node host/host.test.mjs: pure protocol checks, then the real relay (host.mjs) + server (server.mjs) with a test allowlist.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildArgv, decoder, encode, takeChunks } from './protocol.mjs'
@@ -34,30 +34,47 @@ assert.throws(() => buildArgv(spec, { other: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, { __proto__: { a: 1 }, b: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, 'x'), /object/)
 
-// end to end against host.mjs
+// end to end: Chrome's side of host.mjs (the relay) -> unix socket -> server.mjs
 const dir = mkdtempSync(join(tmpdir(), 'refit-host-'))
 const cfg = join(dir, 'commands.json')
-const log = join(dir, 'host.log')
+const env = { ...process.env, REFIT_SIDECAR_COMMANDS: cfg, REFIT_SIDECAR_SOCK: join(dir, 's.sock') }
 writeFileSync(cfg, JSON.stringify({ commands: {
   echo: { exec: 'node', args: ['-e', 'console.log("one\\ntwo"); console.error("\\u001b[31mwarn\\u001b[0m"); process.exit(3)'] },
   greet: { exec: 'node', args: ['-e', 'console.log("hi " + process.argv[1])', '{name}'], params: { name: { pattern: '[a-z]{1,10}' } } },
   sleep: { exec: 'node', args: ['-e', 'console.log("start"); setTimeout(() => {}, 30000)'] },
   flood: { exec: 'node', args: ['-e', 'process.stdout.write(("z".repeat(199) + "\\n").repeat(5000))'] },
 } }))
-const host = spawn(process.execPath, [join(import.meta.dirname, 'host.mjs')], { env: { ...process.env, REFIT_SIDECAR_COMMANDS: cfg, REFIT_SIDECAR_LOG: log }, stdio: ['pipe', 'pipe', 'inherit'] })
+const host = spawn(process.execPath, [join(import.meta.dirname, 'host.mjs')], { env, stdio: ['pipe', 'pipe', 'inherit'] })
 const inbox = []
 let wake = () => {}
 host.stdout.on('data', decoder(m => { inbox.push(m); wake() }))
 const send = m => host.stdin.write(encode(m))
-async function until(id, pred = m => 'exit' in m || 'error' in m || 'hello' in m) {
+async function until(id, pred = m => 'exit' in m || 'error' in m || 'hello' in m, from = 0) {
+  const deadline = Date.now() + 15_000
   for (;;) {
-    const mine = inbox.filter(m => m.id === id)
+    const mine = inbox.slice(from).filter(m => m.id === id)
     if (mine.some(pred)) return mine
-    await new Promise(r => { wake = r; setTimeout(r, 5000) })
+    assert.ok(Date.now() < deadline, `timed out waiting for ${id}`)
+    await new Promise(r => { wake = r; setTimeout(r, 200) })
   }
 }
 const out = (msgs, s) => msgs.filter(m => m.stream === s).map(m => m.chunk).join('')
+let server
+let terminal = ''
+const startServer = async () => {
+  server = spawn(process.execPath, [join(import.meta.dirname, 'server.mjs')], { env, stdio: ['ignore', 'pipe', 'inherit'] })
+  server.stdout.setEncoding('utf8').on('data', d => { terminal += d })
+  await until('status', m => m.server === 'up', inbox.length)
+}
 
+// relay without a server: reports down, and refuses runs with a hint instead of hanging
+await until('status', m => m.server === 'down')
+send({ id: 'early', type: 'run', command: 'echo', args: {} })
+assert.match((await until('early')).at(-1).error, /pnpm server/)
+
+// starting the server flips the relay to up on its own (retry loop)
+await startServer()
+assert.match(terminal, /listening on/)
 send({ id: 'h', type: 'hello' })
 assert.deepEqual((await until('h')).at(-1).hello.commands, ['echo', 'greet', 'sleep', 'flood'])
 
@@ -90,7 +107,24 @@ r = await until('s')
 assert.equal(r.at(-1).signal, 'SIGTERM')
 assert.equal(r.at(-1).exit, 143)
 
+// the terminal saw every run as it happened
+assert.match(terminal, /extension connected[\s\S]*▶ echo[\s\S]*one\ntwo[\s\S]*exit 3/)
+assert.match(terminal, /cancel requested[\s\S]*exit 143/)
+
+// a second server refuses to start while the first owns the socket
+const second = spawn(process.execPath, [join(import.meta.dirname, 'server.mjs')], { env, stdio: 'pipe' })
+assert.equal(await new Promise(r => second.on('close', r)), 1)
+
+// stopping the server: relay reports down live, then up again on restart
+const mark = inbox.length
+server.kill('SIGINT')
+await until('status', m => m.server === 'down', mark)
+await startServer()
+send({ id: 'again', type: 'run', command: 'greet', args: { name: 'back' } })
+assert.equal(out(await until('again'), 'stdout'), 'hi back\n')
+
 host.stdin.end()
 await new Promise(r => host.on('close', r))
-assert.match(readFileSync(log, 'utf8'), /\$ echo[\s\S]*exit 3/)
+server.kill('SIGINT')
+await new Promise(r => server.on('close', r))
 console.log('host ok')

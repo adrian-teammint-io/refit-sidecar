@@ -1,5 +1,7 @@
 # Refit Sidecar
 
+> **Asked to change something?** Go to [Codebase structure → Where to edit](#where-to-edit) first: it maps each feature to its files, symbols and CSS section, so you can open the right file without searching. A new command follows [How a command flows](#how-a-command-flows-touch-these-in-order-for-a-new-one).
+
 Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the three writes, `delete-syncs`, `add-project-user` and `create-project`:
 - `projects q status sort offset`: projects with connection count, FAIL count and last sync; sort `active` (active first, default) / `name` / `recent`
 - `project-connections project_id q sort offset`: one project's connections, each with its newest sync_request; sort `status` (failing first) / `service` / `name`
@@ -112,34 +114,96 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
 
 ## Codebase structure
 
+Read this first when a request comes in: find the feature in **Where to edit**, open those files, and grep the named symbol. Symbols are given instead of line numbers so they stay valid.
+
 ```
-host/
-  server.mjs            `pnpm server`: unix socket server, allowlist, spawn, stream, cancel, live terminal output
-  host.mjs              native messaging relay: Chrome stdio <-> unix socket, reports server up/down
-  protocol.mjs          pure: socket path, framing, chunking, argv building, bindParams/PARAMS, CONNECTIONS, WRITES/checkQuery (tested in host.test.mjs)
-  tabularis-query.mjs   one query through `tabularis --mcp` (JSON-RPC over stdio), env -> connection, checkQuery guard; result JSON to stdout, progress to stderr
-  commands.json         the allowlist
-  sql/                  failed-syncs.sql, projects.sql, project-connections.sql, connections.sql, fitting-rooms.sql, project-members.sql, user-search.sql; writes: delete-syncs.sql, add-project-user.sql, create-project.sql
-  install.mjs           install-host / uninstall-host
-public/manifest.json    MV3 manifest (nativeMessaging, content script on https://app.refit.ai/* and https://staging-app.refit.ai/*)
+host/                     runs on your Mac (node), never in the browser
+  server.mjs              `pnpm server`: unix socket, loadCommands() from commands.json, run() spawns (no shell), cancel(), live terminal
+  host.mjs                native-messaging relay: Chrome stdio <-> unix socket, reports server up/down
+  protocol.mjs            pure + tested: framing (encode/decoder), takeChunks, buildArgv; SQL binding: PARAMS, bindParams;
+                          CONNECTIONS (env -> Tabularis id); write guard: WRITES, CREATE_PROJECT + SHAPES + shape(), checkQuery
+  tabularis-query.mjs     one SQL file through `tabularis --mcp`: env -> connection, bindParams, checkQuery, 60s read / 5 min write
+  commands.json           THE allowlist: command -> {exec, args with "{param}", params {pattern, default}, timeoutMs}
+  sql/                    one file per command (reads: failed-syncs, projects, project-connections, connections, fitting-rooms,
+                          project-members, user-search; writes: delete-syncs, add-project-user, create-project)
+  host.test.mjs           pure checks (framing, argv, bindParams, checkQuery, commands.json shape) + relay/server end to end
+  install.mjs             install-host / uninstall-host
+public/manifest.json      MV3 manifest: content script on app.refit.ai + staging-app.refit.ai
 src/
-  api.ts                Req union + call(), Command, MAX_TABS, HostState / Run (summary, result, tail) / Output types
-  background.ts         worker: message router, badge, openTabs (validated Refit connection URLs only)
-  host.ts               worker: connectNative port, run lifecycle (latest wins, writes never queue), output buffer, run.tail, storeResult per env
-  term.ts               pure: ANSI strip, line splitting, line cap, durations, run status
-  table.ts              pure: Tabularis {columns, rows} reader shared by all parsers; ENV / APP / envKey (prod vs staging)
-  failed-syncs.ts       pure: failed-syncs parser, connection/project/fitting-room URLs, labels
-  projects.ts           pure: browse + members parsers, BATCH, query <-> args (hex q), mergePage, per-project cache cap, pins, ROLES / PLANS / PROJECT_STATUSES, NO_PROJECT
-  samples/              captured command output for parser tests
-  themes.ts ui.css      design system (copied from claude-sidecar; Settings = theme, mode, badge, drawerWidth)
-  shared/               controls, icons, store (useStore per env/useDark/useNow), Terminal, SyncList (select mode, Open in Refit), HostSetup
-  content/              drawer: main.tsx (shadow root), App.tsx (view stack, header, per-view query state), views.tsx (Home,
-                        Projects, Project, Connections, FittingRooms), failed.tsx (Failed syncs + delete confirm), members.tsx (Members, Add user, UserPicker), new-project.tsx (New project), browse.tsx (useBrowse, status line, load more, empty/skeleton),
-                        resize.ts (left-edge drag), Settings.tsx, styles.css
-  popup/                main.tsx, PopupSettings.tsx, popup.css
-  options.tsx           settings page (host setup)
-.claude/skills/         ui-system, ui-verify
+  api.ts                  Command union, Args, Req (run | cancel | hostStatus | openOptions | openTabs), call(), Run, HostState, MAX_TABS
+  background.ts           worker entry: handle() routes Req, openTabs() (validated Refit URLs), paint() badge
+  host.ts                 worker: connect() native port, startRun() (one at a time, latest wins, WRITES never queue),
+                          onMessage(), finish() (run.tail, run.summary, run.result, follow-up `then`), storeResult() per command + env
+  table.ts                parseTable() (Tabularis JSON reader), UUID, ENV / APP (prod vs staging), envKey(), DATA_KEYS
+  projects.ts             types + parsers for browse and members (Project, ProjectConnection, ConnectionHit, FittingRoom, Member,
+                          UserHit, Page...), BATCH, toHex/fromHex/cleanQuery/toArgs/queryOf, mergePage, dropStalePages,
+                          cacheProject, pins (togglePin/refreshPins/pinnedFor), ROLES / PLANS / PROJECT_STATUSES, NO_PROJECT
+  failed-syncs.ts         FailedSync, parseFailedSyncs, URL builders connectionUrl / projectUrl / fittingRoomUrl, platform, dateRange
+  term.ts                 ANSI strip, line split/cap, ago(), runStatus() (pill text + tone)
+  themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth), DEFAULTS, vars(); shared CSS primitives + sync cards
+  shared/
+    store.ts              useStore() (reads this tab's env keys + live updates), saveSettings, useDark, useNow, isRunning
+    SyncList.tsx          failed-sync cards (drawer + popup): select mode, Open in Refit
+    icons.tsx             ICONS (Lucide paths; add new icons here), Icon, IconBtn
+    controls.tsx          Segmented, Switch, ThemePicker
+    HostSetup.tsx         host missing / offline screens, hostLabel / hostTone, HostCard
+    Terminal.tsx          raw output (popup's Output tab only)
+  content/                the drawer (content script, closed shadow DOM)
+    main.tsx              mounts App in a shadow root, injects fonts, stops key events reaching the page
+    App.tsx               View union + TITLES, view stack (push / back), header buttons, per-view query state, exec(), pin(),
+                          toasts, ViewBoundary (crash banner), resize wiring, routes `view.kind` -> component
+    views.tsx             Home (CommandRow list + pinned), ProjectsView (ProjectRow), ProjectView (Connections | Members switch,
+                          ProjectConnectionsPanel), ConnectionList (cards + select + Open in Refit), ConnectionsView, FittingRoomsView;
+                          `Common` props type every view gets
+    failed.tsx            FailedView (fetch, Select mode, bulk bar) + Confirm (delete confirm)
+    members.tsx           MembersPanel (member list), AddUser, UserPicker (shared user search)
+    new-project.tsx       NewProjectView (create-project form + confirm)
+    browse.tsx            shared list plumbing: useBrowse (debounced fetch, refresh, loadMore), runMatches, StatusLine, ErrorBanner,
+                          Empty, Skeleton, SearchBox, LoadMore (auto), Browse wrapper, useDebounced
+    resize.ts             useResize (left-edge drag, arrows, double-click reset; MIN/MAX/DEFAULT_WIDTH)
+    Settings.tsx          SettingsView (drawer settings page)
+    styles.css            drawer styles, one `/* … */` section per feature (see Where to edit)
+  popup/                  toolbar popup: main.tsx (Popup), PopupSettings.tsx, popup.css
+  options.tsx             extension settings page (host setup)
+  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects) against src/samples/
+.claude/skills/           ui-system (design rules), ui-verify (stub.js + mock.html + shoot.sh screenshots)
 ```
+
+### Where to edit
+
+| Request is about… | Edit | Symbols / CSS section |
+|---|---|---|
+| Home screen rows, pinned list | `content/views.tsx` | `Home`, `CommandRow`; CSS "Home: command list" |
+| A new drawer screen | `content/App.tsx` + a component | add to `View` and `TITLES`, route it where `body =` is set, `push({kind})` from a button |
+| Header buttons (back, +, settings, close), STAG chip | `content/App.tsx` | the `<header className="head">` block; CSS "Drawer", "Staging" |
+| Drawer open/close, Esc, toasts, crash banner | `content/App.tsx` | `App` (onKeyDown, `flash`), `ViewBoundary` |
+| Drawer width / resize handle | `content/resize.ts`, `App.tsx` | `useResize`, `clampWidth`; CSS "Left-edge resize handle" |
+| Projects list: search, filters, sort, pin | `content/views.tsx`, `projects.ts`, `host/sql/projects.sql` | `ProjectsView`, `ProjectRow`, `STATUSES`, `PROJECT_SORTS`; pins: `togglePin` / `pinnedFor`; CSS "Projects list" |
+| One project: header, tabs | `content/views.tsx` | `ProjectView`, `PROJECT_TABS`; CSS "One project" |
+| Project connections list, sort, group by service | `content/views.tsx`, `host/sql/project-connections.sql` | `ProjectConnectionsPanel`, `CONN_SORTS`, `ConnectionList` (`groupBy`) |
+| Connection cards anywhere (incl. select + Open in Refit) | `content/views.tsx`, `background.ts` | `ConnectionList`, `openTabs`, `MAX_TABS`; CSS "Select toggle…", "Bulk bar" |
+| Connections search (all projects) | `content/views.tsx`, `host/sql/connections.sql` | `ConnectionsView`, `parseConnections` |
+| Fitting rooms search | `content/views.tsx`, `host/sql/fitting-rooms.sql` | `FittingRoomsView`, `parseFittingRooms`, `fittingRoomUrl` |
+| Members list, Add user | `content/members.tsx`, `host/sql/project-members.sql`, `user-search.sql`, `add-project-user.sql` | `MembersPanel`, `AddUser`, `UserPicker`; CSS "Project members + Add user" |
+| New project form | `content/new-project.tsx`, `host/sql/create-project.sql`, `host/protocol.mjs` | `NewProjectView`, `DEFAULT_MEMBER`; `CREATE_PROJECT`, `SHAPES`; CSS "New project form" |
+| Failed syncs list, select, delete confirm | `content/failed.tsx`, `shared/SyncList.tsx`, `host/sql/failed-syncs.sql`, `delete-syncs.sql` | `FailedView`, `Confirm`, `MAX_DELETE`, `SyncList`; CSS "Failed syncs…", "Bulk bar" |
+| Search box, status line, error banner, empty / loading, load more | `content/browse.tsx` | `SearchBox`, `StatusLine`, `ErrorBanner`, `Empty`, `Skeleton`, `LoadMore`, `useBrowse`; CSS "Search", "Run bar", "Browse results", "Loading skeleton" |
+| Batch size, paging, query <-> args | `projects.ts` (+ every browse SQL's `LIMIT 31`) | `BATCH`, `toArgs`, `queryOf`, `mergePage` |
+| Prod vs staging behaviour | `table.ts`, `host/protocol.mjs` | `ENV`, `APP`, `envKey`, `DATA_KEYS`; `CONNECTIONS` |
+| Links into Refit | `failed-syncs.ts` | `connectionUrl`, `projectUrl`, `fittingRoomUrl` (UUID-checked) |
+| What a run result writes / its toast text | `host.ts` | `storeResult` (one branch per command), `finish`, `outcome`, `run.summary` / `run.tail` |
+| Run queueing, cancel, superseding | `host.ts` | `startRun`, `WRITES`, `cancelRun`, `pending` |
+| Which SQL is allowed, param validation | `host/protocol.mjs`, `host/commands.json` | `PARAMS`, `bindParams`, `WRITES`, `checkQuery`; the command's `params` patterns |
+| Running SQL through Tabularis (timeouts, errors) | `host/tabularis-query.mjs` | `fail`, `TIMEOUT_MS`, `onReply` |
+| Theme, colours, mode, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `SettingsView` |
+| Icons | `shared/icons.tsx` | `ICONS` (add a path), `Icon`, `IconBtn` |
+| Toolbar popup, badge | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; badge: `paint` |
+| Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |
+| Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html, `MODES` in shoot.sh |
+
+### How a command flows (touch these in order for a new one)
+
+1. `host/sql/<name>.sql` (placeholders like `:project_id`) → 2. `host/commands.json` entry (`"{env}"` connection arg, params with patterns) → 3. new value types in `PARAMS`; a write also in `WRITES` (`protocol.mjs`), **ask Hoàn first** → 4. `Command` in `src/api.ts` → 5. parser + types in `src/projects.ts` (or `failed-syncs.ts`) → 6. a `storeResult` branch in `src/host.ts` (writes go through `save()`), the key in `DATA_KEYS` (`table.ts`) and `Store` (`shared/store.ts`) → 7. UI: call `exec(command, { env: ENV, ... })` (browse views via `useBrowse`) and render from `useStore()` data passed down from `App.tsx`.
 
 - Two Vite builds: `vite.config.ts` (options, popup, worker as ES modules) and `vite.content.config.ts` (content script as one IIFE, fonts inlined).
 - Connection link: `https://app.refit.ai/{project_id}/datasources/{service|file}/{connection_id}` (refit-app-2 route `/_auth/$projectId/datasources/service/$datasourceId`, where datasourceId = `connection.id`).

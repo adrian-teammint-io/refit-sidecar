@@ -61,7 +61,7 @@ export function connect() {
 // request for the same command supersedes the running one: it is cancelled and its result thrown away, so typing
 // in a search box never waits behind a stale query.
 // A write never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
-const WRITES: Command[] = ['delete-syncs', 'add-project-user']
+const WRITES: Command[] = ['delete-syncs', 'add-project-user', 'create-project']
 export function startRun(command: Command, args: Args = {}): string {
   if (current && WRITES.includes(command)) throw new Error(`Busy: wait for ${current.run.command} to finish, then try again`)
   if (current) {
@@ -138,11 +138,14 @@ async function finish(end: Pick<Run, 'exit' | 'signal' | 'error'>) {
   if (end.error) c.out.lines.push({ s: 'sys', t: end.error })
   if (c.superseded) c.out.lines.push({ s: 'sys', t: 'superseded by a newer request' })
   const run: Run = { ...c.run, ...end, endedAt: Date.now() }
+  // A failed run keeps its last stderr line (e.g. Tabularis's refusal), so the drawer can say why without a terminal view.
+  if (run.exit !== 0 && !run.signal) run.tail = c.out.lines.findLast(l => l.s === 'err' && l.t.trim())?.t.trim().slice(0, 300)
   clearTimeout(flushTimer)
   flushTimer = undefined
   await chrome.storage.session.set({ output: c.out })
   const r = c.superseded ? undefined : await storeResult(run, c.stdout)
   if (r?.summary) run.summary = r.summary
+  if (r?.result) run.result = r.result
   if (r?.then && !pending) pending = r.then
   await chrome.storage.local.set({ run })
   const next = pending
@@ -155,12 +158,12 @@ function outcome<T extends { error?: string }>(prev: T | undefined, empty: T, ru
   if (run.exit === 0 && !run.error) {
     try { return parse() } catch (e) { return { ...(prev ?? empty), error: `Could not read output: ${(e as Error).message}` } }
   }
-  return { ...(prev ?? empty), error: run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit}). See Output.`) }
+  return { ...(prev ?? empty), error: run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit})${run.tail ? `: ${run.tail}` : ''}`) }
 }
 
 // Writes the run's result under its environment's keys (envKey). May return a one-line summary for the run and a
 // follow-up request (after a delete it can't account for row by row: fetch the failed list again).
-async function storeResult(run: Run, stdout: string): Promise<{ summary?: string; then?: { command: Command; args: Args } } | void> {
+async function storeResult(run: Run, stdout: string): Promise<{ summary?: string; result?: Args; then?: { command: Command; args: Args } } | void> {
   const at = Date.now()
   const offset = Number(run.args?.offset ?? 0)
   const env = run.args?.env
@@ -203,6 +206,15 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
     try { added = (JSON.parse(stdout) as { rows?: unknown[] }).rows?.length ?? 0 } catch { return { summary: 'Add finished; could not read the result', then: reload } }
     // ON CONFLICT DO NOTHING: no row back means they were already a member and nothing changed.
     return { summary: added ? `Added as ${run.args?.role ?? 'viewer'}` : 'Already a member; nothing changed', then: reload }
+  }
+  if (run.command === 'create-project') {
+    if (run.exit !== 0 || run.error) return
+    try {
+      const [id, members] = ((JSON.parse(stdout) as { rows?: unknown[][] }).rows ?? [])[0] ?? []
+      if (typeof id !== 'string') return { summary: 'Create finished; no project id came back. Check the pnpm server terminal.' }
+      const name = fromHex(run.args?.name ?? '')
+      return { summary: `Created ${name} with ${members} member${members === 1 ? '' : 's'}`, result: { projectId: id, name } }
+    } catch { return { summary: 'Create finished; could not read the result. Check the pnpm server terminal.' } }
   }
   if (run.command === 'failed-syncs') {
     const next = outcome<FailedSyncs>(s.failedSyncs, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))

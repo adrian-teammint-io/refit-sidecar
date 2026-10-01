@@ -62,13 +62,12 @@ export function StatusLine({ run, now, command, extra, loading, meta, onRefresh,
   )
 }
 
-export function ErrorBanner({ error, hasRows, onOutput }: { error?: string; hasRows: boolean; onOutput: () => void }) {
+export function ErrorBanner({ error, hasRows }: { error?: string; hasRows: boolean }) {
   if (!error) return null
   return (
     <div className="banner" role="alert">
       <Icon d="alert" />
       <span>{hasRows ? 'Showing the last good result. ' : ''}{error}</span>
-      <button className="btn ghost" onClick={onOutput}>Output</button>
     </div>
   )
 }
@@ -100,10 +99,23 @@ export function SearchBox({ value, onChange, placeholder, autoFocus }: { value: 
   )
 }
 
+// Fetches the next batch by itself when the button scrolls into view (once per batch, so a failed fetch doesn't
+// loop: after an error the button is there to retry by hand).
 export function LoadMore({ page, loadingMore, onClick }: { page?: Page<unknown, object>; loadingMore: boolean; onClick: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null)
+  const tried = useRef(-1) // rows.length we last auto-loaded at
+  const n = page?.rows.length ?? 0
+  const auto = !!page?.hasMore && !loadingMore && !page.error
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !auto) return
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting && tried.current !== n) { tried.current = n; onClick() } }, { rootMargin: '0px 0px 200px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [auto, n])
   if (!page?.hasMore) return page?.rows.length ? <p className="hint muted center">All {page.rows.length} loaded</p> : null
   return (
-    <button className="btn ghost load-more" onClick={onClick} disabled={loadingMore} aria-busy={loadingMore}>
+    <button ref={ref} className="btn ghost load-more" onClick={onClick} disabled={loadingMore} aria-busy={loadingMore}>
       {loadingMore ? 'Loading…' : `Load ${BATCH} more`}<span className="muted">{page.rows.length} shown</span>
     </button>
   )
@@ -112,12 +124,12 @@ export function LoadMore({ page, loadingMore, onClick }: { page?: Page<unknown, 
 // One browse view's skeleton: search, filters, status, banner, rows (dimmed while a new query loads), load more.
 export function Browse<T>({ page, b, rowsFor, empty, children, ...status }: {
   page?: Page<T, object>; b: ReturnType<typeof useBrowse>; rowsFor: (rows: T[]) => ReactNode; empty: ReactNode; children?: ReactNode
-} & Omit<Parameters<typeof StatusLine>[0], 'loading' | 'onRefresh' | 'onCancel'> & { cancel: () => void; showOutput: () => void }) {
-  const { cancel, showOutput, ...line } = status
+} & Omit<Parameters<typeof StatusLine>[0], 'loading' | 'onRefresh' | 'onCancel'> & { cancel: () => void }) {
+  const { cancel, ...line } = status
   return <>
     {children}
     <StatusLine {...line} loading={b.loading} onRefresh={b.refresh} onCancel={cancel} />
-    <ErrorBanner error={page?.error} hasRows={!!page?.rows.length} onOutput={showOutput} />
+    <ErrorBanner error={page?.error} hasRows={!!page?.rows.length} />
     {!page ? <Skeleton /> : !page.rows.length ? (b.loading ? <Skeleton /> : empty) : (
       <div className="results" data-stale={!b.fresh || b.loading}>
         {rowsFor(page.rows)}

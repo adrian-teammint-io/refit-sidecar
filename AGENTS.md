@@ -1,6 +1,6 @@
 # Refit Sidecar
 
-Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the two writes, `delete-syncs` and `add-project-user`:
+Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the three writes, `delete-syncs`, `add-project-user` and `create-project`:
 - `projects q status sort offset`: projects with connection count, FAIL count and last sync; sort `active` (active first, default) / `name` / `recent`
 - `project-connections project_id q sort offset`: one project's connections, each with its newest sync_request; sort `status` (failing first) / `service` / `name`
 - `connections q offset`: connections across every project, matched on name, service or id
@@ -10,23 +10,31 @@ Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowli
 - `user-search project q`: up to 10 existing `refit_user`s whose email or name contains q (at least 2 characters), with their role in this project if they're already a member
 - `delete-syncs ids`: **write.** Deletes 1-100 sync_requests by id, only those still `FAIL`, `RETURNING id` (the drawer version of fish `refit-sync_delete`).
 - `add-project-user user project role`: **write.** Inserts `refit_user_project_relation (user_id, project_id, role)` with role `viewer` / `editor` / `admin`, the same row refit-app-2's admin ProjectMembersModal inserts. `ON CONFLICT DO NOTHING RETURNING`: an existing member is never changed (the app's own mutation would update their role). Only existing users; there's no invite or email.
+- `create-project name user status plan end members`: **write.** One `WITH … INSERT` statement, like refit-gql `add_project` (the welcome page's `createProject`): a `project` row (`name`, `create_by` = owner, `status` ACTIVE / PAUSED / NEED_PAYMENT, `plan` BASIC / DEMO / ENTERPRISE / TRIAL, `end_date`), the owner as admin plus each `uuid:role` member (`DO NOTHING` on duplicates), and for TRIAL `refit_user.had_trial = true` on the owner. Returns the new id and the member count. Unlike the app it doesn't add refit-gql's 3 `REFIT_ADMIN` users; you pick members instead. Nothing else happens on create in Refit either (no triggers, billing or default rows).
 
-Both writes are blocked by Tabularis read-only mode until Hoàn approves them in the Tabularis app, so they wait up to 5 min. Neither queues: the worker refuses a write while another command runs (`WRITES` in `src/host.ts`). Queries never select `refit_user.pwd` or tokens.
+All writes are blocked by Tabularis read-only mode until Hoàn approves them in the Tabularis app, so they wait up to 5 min. None queues: the worker refuses a write while another command runs (`WRITES` in `src/host.ts`). Queries never select `refit_user.pwd` or tokens.
 
 The four browse commands return batches of 30 (`BATCH` in `src/projects.ts`; the SQL asks for `LIMIT 31` and the extra row only means "there is more"). Each takes about 1s. UI and conventions are copied from `~/personal-projects/claude-sidecar`.
 
 Surfaces:
 1. **Drawer**, injected into app.refit.ai and staging-app.refit.ai (closed shadow DOM). It is a stack of views (`content/App.tsx`), and Back or Esc pops one. Drag its left edge (or focus the edge and use arrow keys) to resize, 360 to 1200px. Double-click the edge to reset to 440. The width is saved in `settings.drawerWidth`.
    - **Home**: Search (`Projects`, `Connections`, `Fitting rooms`), Checks (`Failed syncs`, with its count), then pinned projects.
-   - **Projects**: server-side search (debounced 300ms), a status filter, and a sort (Active first / Name / Recent sync). Pinned projects matching the search are listed first. Click the pin icon to pin or unpin. Clicking a project pushes:
+   - **Projects**: server-side search (debounced 300ms), a status filter, and a sort (Active first / Name / Recent sync). Pinned projects matching the search are listed first. Click the pin icon to pin or unpin. The header's **+** opens **New project** (`content/new-project.tsx`):
+     - name, owner (picked from existing users), members with a role each (hoan@team-mint.io is looked up and pre-filled as admin, removable), plan, status and end date (default one month out)
+     - warns when ACTIVE has an end date of today or earlier (billing / expiry picks it up), notes TRIAL's had_trial
+     - a PROD/STAG confirm at the bottom; on prod you type the project name. On success the view is replaced by the new project's view.
+     - `user-search` outside a project passes `NO_PROJECT` (the nil UUID), so nobody shows as an existing member.
+
+     Clicking a project pushes:
    - **Project**: pin, **Open in Refit** (`app.refit.ai/<project id>`), then a Connections | Members switch.
      - Connections: search and sort (Failing first / Service / Name). Sort by service adds a header per platform. Cached per project.
      - Members (`content/members.tsx`): the member list (auto-loads once, refresh in the status line), and **Add user**: search existing users by email or name (debounced), pick one (members are shown as `member · role` and can't be picked), choose a role (Viewer default), then confirm with a PROD/STAG tag. On prod you type the email's part before `@` to enable Add. After it finishes, the toast says "Added as viewer" or "Already a member; nothing changed", the form closes and the list reloads. Esc closes the form first. There's no Refit page to link to: the app's member UI is a modal under `/admin/projects` with no URL.
    - **Connections** / **Fitting rooms**: search everything. Each card links to Refit, and its project name opens that project's view.
+   - **Connection cards** (project Connections tab and Connections search) have the same **Select** mode as Failed syncs, but the bulk bar's action is **Open N in Refit**: the worker opens each connection page in a background tab (`openTabs` in `background.ts`, at most `MAX_TABS` = 10, only URLs shaped like `connectionUrl()`). Deleting happens there, in Refit's own dialog. There's deliberately no connection delete in the drawer: refit-gql `delete_connection` (`db/api.py:1158-1256`) refuses if a fitting room uses the connection, deletes seed_data / data_source / column_definition(_action) / connection / column_selection / service_connection in order, and `DROP`s the seed view and the `{service}."{id}"` data table. A plain `DELETE FROM connection` fails on the RESTRICT FK from column_definition_action, or leaves those behind. If a real Delete button is wanted later, the proposed route is calling Refit's own `deleteServiceConnection` mutation with the logged-in user's session (Refit then does every check and cleanup). Not built: it means reading the user's token from the page, which breaks the "reads nothing from the page" rule below, so ask Hoàn first.
    - **Failed syncs** (`content/failed.tsx`): parsed failed-sync cards, each with **Open in Refit** in its foot; **Fetch FAIL syncs** runs it. Delete hides behind **Select**: cards get a round check (clicking the card toggles it; selected = accent border + ring, red only on Delete), and a sticky bulk bar shows the count, **Select all** (first 100) / **Clear**, and **Delete N**. Delete expands that bar in place into the confirm: PROD/STAG tag, a preview of the rows, and on prod the count typed back before Delete is enabled. Back or Esc closes it. A delete never queues: it's refused while another command runs. Deleted rows (from `RETURNING id`) drop out of the list; if Tabularis doesn't return them, the list is fetched again. The toast and status pill show `run.summary` ("Deleted 3 of 3 …").
    - **Staging**: on staging-app.refit.ai the drawer is `ENV = 'stag'` (`src/table.ts`, from `location.hostname`), shows an amber **STAG** chip in the header, sends `env: 'stag'` with every command, and links to staging-app.refit.ai.
-   - **Output**: the raw terminal of the last run, from the header's `>_` button in any view.
-   - Every browse view has a status line (count, refresh, cancel) and **Load 30 more**. Rows dim while a new query loads.
+   - **No Output view**: the `pnpm server` terminal already prints every run live. A failed run keeps its last stderr line (`run.tail`, set in `finish()`), and the error banners and the failure toast show it ("Command failed (exit 1): run_query error: …"). `tabularis-query.mjs` prints Tabularis's log before its own error so that line is the reason.
+   - Every browse view has a status line (count, refresh, cancel) and **Load 30 more**, which also fires by itself when it scrolls into view (IntersectionObserver, once per batch, not after an error). Rows dim while a new query loads.
    - Launcher with the failed count, and a toast when a run started from this tab finishes.
 2. **Toolbar icon + popup**: last run summary (count, exit status, duration), the 4 newest failures, raw output, settings. Badge = failed count (red), `!` (amber) when the native host isn't installed.
 3. **Settings page**: native host setup with this extension's id filled in, plus live server status.
@@ -51,12 +59,12 @@ The version lives only in `package.json`; the build writes it into `dist/manifes
 ```
 drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──connectNative──▶ host/host.mjs (relay, Chrome starts it)
       ▲                            │ writes                                                │ unix socket ~/.refit-sidecar.sock (0600)
-      └──── storage.onChanged ◀────┘ local: settings, run, failedSyncs                     ▼
+      └──── storage.onChanged ◀────┘ local: settings, run, results per env (DATA_KEYS)    ▼
                                      session: host, output              host/server.mjs  (`pnpm server`, your terminal)
                                                                           └─spawn, no shell─▶ node tabularis-query.mjs ─▶ tabularis --mcp ─▶ REFIT_ PROD | REFIT_STAG
 ```
 
-- **The worker owns the only port.** Surfaces never talk to the host. They send `call({type: 'run' | 'cancel' | 'hostStatus' | 'openOptions'})` and render from storage. `storage.session` is opened to content scripts with `setAccessLevel` in `background.ts`.
+- **The worker owns the only port.** Surfaces never talk to the host. They send `call({type: 'run' | 'cancel' | 'hostStatus' | 'openOptions' | 'openTabs'})` and render from storage. `storage.session` is opened to content scripts with `setAccessLevel` in `background.ts`.
 - **Why a relay + unix socket, not a localhost HTTP server**: any web page can try to reach a localhost port, but a browser cannot reach a unix socket. Chrome only lets this extension's id start the relay (`allowed_origins`), and the socket is mode 0600, so only your user can open it.
 - **Protocol** (Chrome's 4-byte little-endian length + JSON; the same framing is reused on the socket, and the relay forwards frames unchanged):
   - Requests: `{id, type: 'hello'}`, `{id, type: 'run', command, args}`, `{id, type: 'cancel'}`
@@ -66,7 +74,7 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
 - **Chunking**: the server sends whole lines in chunks of at most 64K chars (`MAX_CHUNK` in `protocol.mjs`). That keeps every message under Chrome's 1 MB host → extension limit even when every character is JSON-escaped. A partial line is flushed after 100 ms idle or at stream end.
 - **Results** (`storage.local`): `failedSyncs`, plus pages `{at, runId, query, rows, hasMore}` for `projects`, `connections` and `fittingRooms`, and for `projectConnections` (by project id, newest `MAX_CACHED_PROJECTS` kept). `mergePage()` appends a run of the same query at the next offset; any other query replaces the page. `pins` holds a project snapshot per pinned id, refreshed whenever that project comes back in a result. A failed run keeps the last good rows and adds `error`. Results are per environment: prod uses these key names (the popup and badge only read prod), staging stores `stag.<key>` (`envKey()`, `DATA_KEYS` in `src/table.ts`). The worker writes under the run's `args.env`; `useStore` reads the tab's `ENV`. `settings`, `run`, `host` and `output` are shared, and a run only counts as a view's own (`runMatches`) when its env matches the tab.
 - **One command at a time, latest wins** (`startRun` in `host.ts`): while a run is going, the newest request waits, replacing any older waiting one. A request for the *same* command cancels the running one and discards its result, so a search box never waits behind a stale query. `finish()` starts the waiting request. The status line shows "Queued after …".
-- **Output buffer**: the worker strips ANSI and handles `\r` redraws (`term.ts`). It keeps the last `MAX_LINES` (2000) lines and counts the dropped ones, and writes `output` to `storage.session` at most every 120 ms. Raw stdout (up to 8 MB) is kept separately for the parser.
+- **Output buffer**: the worker strips ANSI and handles `\r` redraws (`term.ts`). It keeps the last `MAX_LINES` (2000) lines and counts the dropped ones, and writes `output` to `storage.session` at most every 120 ms (only the popup's Output tab shows it). Raw stdout (up to 8 MB) is kept separately for the parser.
 - **Lifecycle** (`HostState` in `api.ts`):
   - `offline`: relay up, no `pnpm server` running. Flips to `ready` by itself when the server starts, and back when it stops (Ctrl+C).
   - If the relay port disconnects, `lastError` sets the state: `not found` → `missing`, `forbidden` → `forbidden` (the manifest is for another id), anything else → `down` (retried with backoff 1s → 60s).
@@ -85,14 +93,14 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
   - `timeoutMs`
 - `spawn(..., {shell: false})` always. Never build a shell string, never pass page text into a command.
 - Nothing from app.refit.ai's page becomes a command or argument; the drawer reads nothing from the page. The only page-derived input is `location.hostname` (the origin, which a page can't fake) choosing `env`, and the host's `env` pattern only allows `prod|stag`. Data from the DB is rendered as text, and `connectionUrl()` only builds links from UUID-shaped ids. Delete ids come from rows the DB returned and must be UUIDs (`PARAMS.ids`).
-- `tabularis-query.mjs` runs `checkQuery()` (protocol.mjs): a single `SELECT`/`WITH`, or a write listed in `WRITES`, which maps a SQL file to the exact statement shape it must have (`sql/delete-syncs.sql`: `DELETE FROM sync_request WHERE status = 'FAIL' AND id IN ('<uuid>', …) RETURNING id`; `sql/add-project-user.sql`: `INSERT INTO refit_user_project_relation (user_id, project_id, role) VALUES ('<uuid>', '<uuid>', '<role>') ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id, role`). Tabularis connects as `postgres` (superuser), so these fixed files plus Tabularis's own read-only mode and approval prompt are the guard.
+- `tabularis-query.mjs` runs `checkQuery()` (protocol.mjs): a single `SELECT`/`WITH`, or a write listed in `WRITES`, which maps a SQL file to the exact statement shape it must have (`sql/delete-syncs.sql`: `DELETE FROM sync_request WHERE status = 'FAIL' AND id IN ('<uuid>', …) RETURNING id`; `sql/add-project-user.sql`: `INSERT INTO refit_user_project_relation (user_id, project_id, role) VALUES ('<uuid>', '<uuid>', '<role>') ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id, role`; `sql/create-project.sql`: the `CREATE_PROJECT` template, turned into a regex by `shape()` with each placeholder replaced by the only forms its binder emits (`SHAPES`)). The template lives in protocol.mjs, apart from the .sql file, so editing the file can't widen what's allowed; host.test.mjs checks the bound file still matches. A read must also contain no write keyword (`insert`, `update`, `delete`, `create`, …), because `WITH x AS (INSERT …) SELECT …` starts with `WITH`. Tabularis connects as `postgres` (superuser), so these fixed files plus Tabularis's own read-only mode and approval prompt are the guard.
 - **Ask Hoàn before adding any command that writes, deletes or touches the network** (DB reads included), and before adding anything to `WRITES`.
 - **Never run `tabularis-query.mjs` or any write command to test, not even with a fake binary.** Test guards as pure functions in `host/host.test.mjs`.
 
 ## Adding a command
 
 1. Add an entry to `host/commands.json` (edits apply on the next run; no reinstall needed). For a query: a `sql/*.sql` file run by `tabularis-query.mjs`, with `"{env}"` as its connection arg and an `env` param (`prod|stag`, default `prod`); host.test.mjs checks every entry has both.
-   - Tabularis has no bind parameters. SQL files use unquoted typed placeholders, filled by `bindParams()` (`PARAMS` in protocol.mjs): `:project_id` / `:user_id` (strict UUID), `:ids` (1-100 UUIDs), `:offset` (int), `:status` / `:sort` / `:role` (enums), `:q` (hex of UTF-8 text, emitted as `convert_from(decode('…','hex'),'UTF8')`). Every placeholder needs a value and every value must be used. `tabularis-query.mjs` takes them as `--name value` pairs after the row limit. Declare each param in commands.json with a matching `pattern` too, so the server rejects bad input before spawning.
+   - Tabularis has no bind parameters. SQL files use unquoted typed placeholders, filled by `bindParams()` (`PARAMS` in protocol.mjs): `:project_id` / `:user_id` (strict UUID), `:ids` (1-100 UUIDs), `:members` (0-50 `uuid:role`), `:offset` (int), `:status` / `:sort` / `:role` / `:project_status` / `:plan` (enums), `:end_date` (real `YYYY-MM-DD`), `:name` (hex text, not blank), `:q` (hex of UTF-8 text, emitted as `convert_from(decode('…','hex'),'UTF8')`). Every placeholder needs a value and every value must be used. `tabularis-query.mjs` takes them as `--name value` pairs after the row limit. Declare each param in commands.json with a matching `pattern` too, so the server rejects bad input before spawning.
    - A new kind of value gets a new validator in `PARAMS`. Never splice free text into SQL.
    - Match search text with `strpos(lower(col), lower(:q)) > 0` (no LIKE wildcards to escape).
    - **Tabularis read-only mode is ON** for refit-prod and blocks whatever it thinks is a write. It flags `replace(` in larger queries, so never use `replace()` or backslash string literals in SQL files. Leading `--` comments are fine (`stripLeadingComments()`).
@@ -111,22 +119,22 @@ host/
   protocol.mjs          pure: socket path, framing, chunking, argv building, bindParams/PARAMS, CONNECTIONS, WRITES/checkQuery (tested in host.test.mjs)
   tabularis-query.mjs   one query through `tabularis --mcp` (JSON-RPC over stdio), env -> connection, checkQuery guard; result JSON to stdout, progress to stderr
   commands.json         the allowlist
-  sql/                  failed-syncs.sql, projects.sql, project-connections.sql, connections.sql, fitting-rooms.sql, project-members.sql, user-search.sql; writes: delete-syncs.sql, add-project-user.sql
+  sql/                  failed-syncs.sql, projects.sql, project-connections.sql, connections.sql, fitting-rooms.sql, project-members.sql, user-search.sql; writes: delete-syncs.sql, add-project-user.sql, create-project.sql
   install.mjs           install-host / uninstall-host
 public/manifest.json    MV3 manifest (nativeMessaging, content script on https://app.refit.ai/* and https://staging-app.refit.ai/*)
 src/
-  api.ts                Req union + call(), HostState / Run / Output types
-  background.ts         worker: message router, badge
-  host.ts               worker: connectNative port, run lifecycle, output buffer, failedSyncs parse/store
+  api.ts                Req union + call(), Command, MAX_TABS, HostState / Run (summary, result, tail) / Output types
+  background.ts         worker: message router, badge, openTabs (validated Refit connection URLs only)
+  host.ts               worker: connectNative port, run lifecycle (latest wins, writes never queue), output buffer, run.tail, storeResult per env
   term.ts               pure: ANSI strip, line splitting, line cap, durations, run status
   table.ts              pure: Tabularis {columns, rows} reader shared by all parsers; ENV / APP / envKey (prod vs staging)
   failed-syncs.ts       pure: failed-syncs parser, connection/project/fitting-room URLs, labels
-  projects.ts           pure: browse parsers, BATCH, query <-> args (hex q), mergePage, per-project cache cap, pins
+  projects.ts           pure: browse + members parsers, BATCH, query <-> args (hex q), mergePage, per-project cache cap, pins, ROLES / PLANS / PROJECT_STATUSES, NO_PROJECT
   samples/              captured command output for parser tests
-  themes.ts ui.css      design system (copied from claude-sidecar; Settings = theme, mode, badge)
+  themes.ts ui.css      design system (copied from claude-sidecar; Settings = theme, mode, badge, drawerWidth)
   shared/               controls, icons, store (useStore per env/useDark/useNow), Terminal, SyncList (select mode, Open in Refit), HostSetup
   content/              drawer: main.tsx (shadow root), App.tsx (view stack, header, per-view query state), views.tsx (Home,
-                        Projects, Project, Connections, FittingRooms), failed.tsx (Failed syncs + delete confirm), members.tsx (Members + Add user), browse.tsx (useBrowse, status line, load more, empty/skeleton),
+                        Projects, Project, Connections, FittingRooms), failed.tsx (Failed syncs + delete confirm), members.tsx (Members, Add user, UserPicker), new-project.tsx (New project), browse.tsx (useBrowse, status line, load more, empty/skeleton),
                         resize.ts (left-edge drag), Settings.tsx, styles.css
   popup/                main.tsx, PopupSettings.tsx, popup.css
   options.tsx           settings page (host setup)

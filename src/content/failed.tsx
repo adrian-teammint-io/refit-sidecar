@@ -15,7 +15,7 @@ const MAX_DELETE = 100 // the delete-syncs ids param takes at most 100
 const ENV_NAME = ENV === 'stag' ? 'staging' : 'prod'
 type Row = FailedSyncs['rows'][number]
 
-export function FailedView({ fs, run, now, exec, cancel, showOutput }: { fs?: FailedSyncs } & Common) {
+export function FailedView({ fs, run, now, exec, cancel }: { fs?: FailedSyncs } & Common) {
   const rows = fs?.rows ?? []
   const n = rows.length
   const [selecting, setSelecting] = useState(false)
@@ -48,7 +48,7 @@ export function FailedView({ fs, run, now, exec, cancel, showOutput }: { fs?: Fa
               <button className="btn primary sm" onClick={() => exec('failed-syncs', { env: ENV })}><Icon d="play" size={13} />Fetch FAIL syncs</button>
             </>}
       </div>
-      <ErrorBanner error={fs?.error} hasRows={!!n} onOutput={showOutput} />
+      <ErrorBanner error={fs?.error} hasRows={!!n} />
       {!fs ? (mine ? <Skeleton rows={3} /> : <Empty icon="terminal" title="No results yet" text={<><b>Fetch FAIL syncs</b> runs <code>failed-syncs</code> in your <code>pnpm server</code> terminal and lists every {ENV_NAME} sync_request with status FAIL.</>} />)
         : !n && !fs.error ? <Empty icon="check" title="No failed syncs" text={`No sync_request on ${ENV_NAME} has status FAIL.`} />
         : <>

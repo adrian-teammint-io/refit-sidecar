@@ -40,9 +40,10 @@ tab.on('exit', (code, signal) => { if (!answered) fail(`Tabularis exited (${sign
 const timer = setTimeout(() => fail(`Timed out after ${TIMEOUT_MS / 1000}s`, 124), TIMEOUT_MS)
 process.on('SIGTERM', () => { tab.kill('SIGTERM'); say('Cancelled'); process.exit(143) })
 
+// The log first and the reason last: the drawer shows a failed run's last stderr line (run.tail).
 function fail(msg, code = 1) {
+  if (tail.length) say('--- tabularis log ---\n' + tail.join('\n') + '\n---')
   say(msg)
-  if (tail.length) say('--- tabularis log ---\n' + tail.join('\n'))
   tab.kill()
   process.exit(code)
 }

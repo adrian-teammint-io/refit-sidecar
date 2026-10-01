@@ -1,7 +1,7 @@
 // Drawer views. Home lists the commands; each command opens its own view. All data comes from storage (useStore).
 // Browse views fetch in batches of BATCH: typing re-queries the server (debounced), "Load more" fetches the next batch.
 import { useState } from 'react'
-import type { Run } from '../api'
+import { call, MAX_TABS, type Run } from '../api'
 import { ago } from '../term'
 import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, type FailedSyncs } from '../failed-syncs'
 import {
@@ -11,11 +11,10 @@ import {
 } from '../projects'
 import { Icon, type IconName } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { ENV } from '../table'
 import { MembersPanel } from './members'
 import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
 export type { Exec } from './browse'
-export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void; showOutput: () => void }
+export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
 type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 
 // ---------- Home: the command list ----------
@@ -57,7 +56,6 @@ export function Home({ pins, failedSyncs: fs, now, open, openProject }: {
           <li key={p.id}><button className="proj" onClick={() => openProject(p)}><Icon d="pin" size={14} /><span className="proj-main"><strong>{p.name}</strong></span>{p.failed > 0 && <span className="count-chip">{p.failed}</span>}<Icon d="chevron" /></button></li>
         ))}</ul>
       </>}
-      <p className="hint muted">Each command runs in your <code>pnpm server</code> terminal against {ENV === 'stag' ? 'staging (REFIT_STAG)' : 'prod'} through Tabularis. Only Delete on Failed syncs writes.</p>
     </div>
   )
 }
@@ -97,7 +95,7 @@ export function ProjectsView({ projects, pins, query, setQuery, openProject, pin
   const row = (p: Project) => <ProjectRow key={p.id} p={p} now={c.now} pinned={pinnedIds.has(p.id)} onOpen={() => openProject(p)} onPin={() => pin(p)} />
   return (
     <div className="pane">
-      <Browse page={projects} b={b} run={c.run} now={c.now} command="projects" cancel={c.cancel} showOutput={c.showOutput}
+      <Browse page={projects} b={b} run={c.run} now={c.now} command="projects" cancel={c.cancel}
         meta={projects?.at ? `${projects.rows.length}${projects.hasMore ? '+' : ''} projects · updated ${ago(projects.at, c.now)}` : ''}
         empty={<Empty icon="search" title="No matching projects" text="Try other words, or another status." />}
         rowsFor={rows => <>
@@ -153,7 +151,7 @@ function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef
   const b = useBrowse({ page, query, command: 'project-connections', extra, ...c })
   return (
     <>
-      <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel} showOutput={c.showOutput}
+      <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : 'This project has no data sources yet.'} />}
         rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} />}>
@@ -167,26 +165,50 @@ function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef
 }
 
 // Connection cards. groupBy=service adds a header whenever the platform changes (rows arrive sorted by it).
+// Select mode (same UX as Failed syncs) opens the chosen connections' Refit pages in background tabs: deleting a
+// connection happens there, in Refit's own dialog, which checks fitting rooms and drops the connection's data table
+// and seed view. A plain DELETE here would leave those behind (see AGENTS.md).
 function ConnectionList({ rows, now, groupBy, openProject }: {
   rows: (ProjectConnection & { project?: string })[]; now: number; groupBy?: 'service'; openProject?: (p: ProjectRef) => void
 }) {
   const [open, setOpen] = useState<string>()
-  return (
-    <ul className="syncs">
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [err, setErr] = useState('')
+  const selectable = rows.filter(c => connectionUrl(c))
+  const selected = selectable.filter(c => picked.has(c.connectionId))
+  const toggle = (id: string) => setPicked(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const exit = () => { setSelecting(false); setPicked(new Set()); setErr('') }
+  const allOn = !!selectable.length && selected.length === Math.min(selectable.length, MAX_TABS)
+  const openAll = () => call({ type: 'openTabs', urls: selected.map(c => connectionUrl(c)!) }).then(exit, e => setErr((e as Error).message))
+  return <>
+    <div className="list-tools">
+      <span className="muted">{selecting ? 'Pick connections to open in Refit (delete them there)' : ''}</span>
+      <span className="spacer" />
+      {selecting
+        ? <button className="btn ghost sm" onClick={exit}>Done</button>
+        : !!selectable.length && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
+    </div>
+    <ul className="syncs" data-selecting={selecting}>
       {rows.map((c, i) => {
         const url = connectionUrl(c)
         const reason = c.displayReason ?? c.reason
         const expanded = open === c.connectionId
         const header = groupBy && (i === 0 || platform(rows[i - 1]) !== platform(c))
+        const on = picked.has(c.connectionId)
+        const pick = selecting && url ? (e: React.MouseEvent) => { if (!(e.target as Element).closest('a, button')) toggle(c.connectionId) } : undefined
         return (
           <li key={c.connectionId} className="conn-item" style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
             {header && <p className="eyebrow group-head">{platform(c)}</p>}
-            <div className="sync conn" data-status={c.status ?? 'NEVER'}>
+            <div className="sync conn" data-status={c.status ?? 'NEVER'} data-selected={selecting && on} onClick={pick}>
               <div className="sync-head">
+                {selecting && url && (
+                  <button className="check" role="checkbox" aria-checked={on} aria-label={`Select ${c.name}`} onClick={() => toggle(c.connectionId)}><Icon d="check" size={12} /></button>
+                )}
                 <span className="badge">{platform(c)}</span>
                 <strong title={c.name}>{c.name.trim()}</strong>
                 <span className="pill" data-tone={c.status ? TONE[c.status] ?? 'none' : 'none'}>{c.status ?? 'never synced'}</span>
-                {url && <a className="icon-btn sync-link" href={url} target="_top" aria-label={`Open ${c.name} on Refit`} title="Open connection"><Icon d="external" size={14} /></a>}
+                {url && !selecting && <a className="icon-btn sync-link" href={url} target="_top" aria-label={`Open ${c.name} on Refit`} title="Open connection"><Icon d="external" size={14} /></a>}
               </div>
               {c.project && openProject && (
                 <button className="link-btn" onClick={() => openProject({ id: c.projectId, name: c.project! })}><Icon d="folder" size={12} />{c.project}</button>
@@ -206,7 +228,24 @@ function ConnectionList({ rows, now, groupBy, openProject }: {
         )
       })}
     </ul>
-  )
+    {selecting && (
+      <div className="bulk" role="toolbar" aria-label="Selected connections">
+        <div className="bulk-row">
+          <span className="bulk-count"><b>{selected.length}</b> selected</span>
+          <button className="link-btn" onClick={() => setPicked(allOn ? new Set() : new Set(selectable.slice(0, MAX_TABS).map(c => c.connectionId)))}>
+            {allOn ? 'Clear' : selectable.length > MAX_TABS ? `Select first ${MAX_TABS}` : `Select all ${selectable.length}`}
+          </button>
+          <span className="spacer" />
+          <button className="btn primary sm" disabled={!selected.length || selected.length > MAX_TABS} onClick={openAll}>
+            <Icon d="external" size={13} />Open {selected.length || ''} in Refit
+          </button>
+        </div>
+        <p className="bulk-note muted">
+          {err || (selected.length > MAX_TABS ? `At most ${MAX_TABS} tabs at once.` : 'Opens each in a background tab. Delete it there: Refit checks fitting rooms and removes its data table.')}
+        </p>
+      </div>
+    )}
+  </>
 }
 
 // ---------- Connections search (all projects) ----------
@@ -217,7 +256,7 @@ export function ConnectionsView({ page, query, setQuery, openProject, ...c }: {
   const b = useBrowse({ page, query, command: 'connections', ...c })
   return (
     <div className="pane">
-      <Browse page={page} b={b} run={c.run} now={c.now} command="connections" cancel={c.cancel} showOutput={c.showOutput}
+      <Browse page={page} b={b} run={c.run} now={c.now} command="connections" cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections${page.query.q ? ` matching "${page.query.q}"` : ''}` : ''}
         empty={<Empty icon="search" title="No matching connections" text="Search matches connection name, platform (META, TIKTOK…) or id." />}
         rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} />}>
@@ -235,7 +274,7 @@ export function FittingRoomsView({ page, query, setQuery, openProject, ...c }: {
   const b = useBrowse({ page, query, command: 'fitting-rooms', ...c })
   return (
     <div className="pane">
-      <Browse page={page} b={b} run={c.run} now={c.now} command="fitting-rooms" cancel={c.cancel} showOutput={c.showOutput}
+      <Browse page={page} b={b} run={c.run} now={c.now} command="fitting-rooms" cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} fitting rooms · newest edit first` : ''}
         empty={<Empty icon="search" title="No matching fitting rooms" text="Search matches fitting room name, project name or id." />}
         rowsFor={rows => (

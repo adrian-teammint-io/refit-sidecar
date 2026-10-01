@@ -29,7 +29,7 @@ export function MembersPanel({ projectId, projectName, members, search, ...c }: 
       {adding
         ? <AddUser projectId={projectId} projectName={projectName} search={search} onClose={() => setAdding(false)} {...c} />
         : <button className="btn ghost add-user" onClick={() => setAdding(true)}><Icon d="plus" size={14} />Add user</button>}
-      <ErrorBanner error={members?.error} hasRows={!!n} onOutput={c.showOutput} />
+      <ErrorBanner error={members?.error} hasRows={!!n} />
       {!members ? <Skeleton rows={3} />
         : !n ? <Empty icon="users" title="No members" text="Nobody has access to this project yet." />
         : <ul className="member-list">
@@ -49,17 +49,10 @@ export function MembersPanel({ projectId, projectName, members, search, ...c }: 
 function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: {
   projectId: string; projectName: string; search?: UserSearch; onClose: () => void
 } & Common) {
-  const [q, setQ] = useState('')
   const [picked, setPicked] = useState<UserHit>()
   const [role, setRole] = useState<Role>('viewer')
   const [typed, setTyped] = useState('')
-  const wanted = useDebounced(cleanQuery(q))
   const extra = { project: projectId }
-  useEffect(() => {
-    if (ready && wanted.length >= 2 && !picked) exec('user-search', { env: ENV, project: projectId, q: toHex(wanted) })
-  }, [wanted, ready])
-  const fresh = !!search && search.project === projectId && search.q === wanted
-  const searching = isRunning(run) && runMatches(run, 'user-search', extra)
   const saving = isRunning(run) && runMatches(run, 'add-project-user', extra)
   const last = run && !isRunning(run) && runMatches(run, 'add-project-user', extra) ? run : undefined
   // A finished add (added, or already a member): the members list reloads by itself; close the form.
@@ -75,24 +68,8 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
         <span className="spacer" />
         <button className="icon-btn sm" aria-label="Close add user" title="Close" onClick={onClose}><Icon d="x" size={14} /></button>
       </div>
-      {!picked ? <>
-        <SearchBox value={q} onChange={setQ} placeholder="Search users by email or name" autoFocus />
-        {wanted.length < 2 ? <p className="hint muted">Type at least 2 characters. Only existing Refit users can be added.</p>
-          : searching && !fresh ? <p className="hint muted">Searching…</p>
-          : fresh && !search!.rows.length ? <p className="hint muted">No user matches "{wanted}".</p>
-          : fresh && <ul className="hit-list" data-stale={searching}>
-              {search!.rows.map(u => (
-                <li key={u.id}>
-                  <button className="hit" disabled={!!u.memberRole} onClick={() => { setPicked(u); setTyped('') }}
-                    title={u.memberRole ? `Already a member as ${u.memberRole}` : `Add ${u.email}`}>
-                    <span className="avatar" aria-hidden>{(u.name || u.email)[0].toUpperCase()}</span>
-                    <span className="member-main"><strong>{u.email}</strong><span className="muted">{u.name ?? 'No name'}</span></span>
-                    {u.memberRole ? <span className="role" data-role={u.memberRole}>member · {u.memberRole}</span> : <Icon d="plus" size={14} />}
-                  </button>
-                </li>
-              ))}
-            </ul>}
-      </> : <>
+      {!picked ? <UserPicker projectId={projectId} search={search} run={run} ready={ready} exec={exec} onPick={u => { setPicked(u); setTyped('') }} />
+      : <>
         <div className="picked">
           <span className="avatar" aria-hidden>{(picked.name || picked.email)[0].toUpperCase()}</span>
           <span className="member-main"><strong>{picked.email}</strong><span className="muted">{picked.name ?? 'No name'}</span></span>
@@ -123,4 +100,35 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
       </>}
     </div>
   )
+}
+
+// Search existing users by email or name (user-search, debounced) and pick one. Used by Add user and New project.
+// `projectId` marks who's already a member (they can't be picked); `skip` hides users already chosen elsewhere.
+export function UserPicker({ projectId, search, run, ready, exec, onPick, skip, placeholder = 'Search users by email or name' }: {
+  projectId: string; search?: UserSearch; onPick: (u: UserHit) => void; skip?: Set<string>; placeholder?: string
+} & Pick<Common, 'run' | 'ready' | 'exec'>) {
+  const [q, setQ] = useState('')
+  const wanted = useDebounced(cleanQuery(q))
+  useEffect(() => { if (ready && wanted.length >= 2) exec('user-search', { env: ENV, project: projectId, q: toHex(wanted) }) }, [wanted, ready])
+  const fresh = !!search && search.project === projectId && search.q === wanted
+  const searching = isRunning(run) && runMatches(run, 'user-search', { project: projectId })
+  const hits = fresh ? search!.rows.filter(u => !skip?.has(u.id)) : []
+  return <>
+    <SearchBox value={q} onChange={setQ} placeholder={placeholder} autoFocus />
+    {wanted.length < 2 ? <p className="hint muted">Type at least 2 characters. Only existing Refit users can be picked.</p>
+      : !fresh ? <p className="hint muted">{searching ? 'Searching…' : 'Waiting to search…'}</p>
+      : !hits.length ? <p className="hint muted">No {search!.rows.length ? 'other ' : ''}user matches "{wanted}".</p>
+      : <ul className="hit-list" data-stale={searching}>
+          {hits.map(u => (
+            <li key={u.id}>
+              <button className="hit" disabled={!!u.memberRole} onClick={() => { onPick(u); setQ('') }}
+                title={u.memberRole ? `Already a member as ${u.memberRole}` : `Pick ${u.email}`}>
+                <span className="avatar" aria-hidden>{(u.name || u.email)[0].toUpperCase()}</span>
+                <span className="member-main"><strong>{u.email}</strong><span className="muted">{u.name ?? 'No name'}</span></span>
+                {u.memberRole ? <span className="role" data-role={u.memberRole}>member · {u.memberRole}</span> : <Icon d="plus" size={14} />}
+              </button>
+            </li>
+          ))}
+        </ul>}
+  </>
 }

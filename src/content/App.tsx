@@ -6,10 +6,10 @@ import { togglePin, type Project, type ProjectsQuery } from '../projects'
 import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
-import { Terminal } from '../shared/Terminal'
 import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
 import { SettingsView } from './Settings'
 import { FailedView } from './failed'
+import { NewProjectView } from './new-project'
 import { Home, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type HomeTarget } from './views'
 import { useResize } from './resize'
 
@@ -21,13 +21,13 @@ type View =
   | { kind: 'projects' }
   | { kind: 'connections' }
   | { kind: 'fitting' }
+  | { kind: 'new-project' }
   | { kind: 'project'; project: ProjectRef }
-  | { kind: 'output' }
   | { kind: 'settings' }
 
 const TITLES: Record<View['kind'], string> = {
   home: 'Refit Sidecar', failed: 'Failed syncs', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
-  project: '', output: 'Output', settings: 'Settings',
+  'new-project': 'New project', project: '', settings: 'Settings',
 }
 
 // A render error in one view shows here instead of unmounting the whole drawer (and launcher). Keyed by view, so Back clears it.
@@ -46,7 +46,7 @@ class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }>
 
 export function App() {
   const store = useStore()
-  const { settings, host, run, output, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, loaded } = store
+  const { settings, host, run, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, loaded } = store
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
   // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
@@ -85,7 +85,7 @@ export function App() {
   useEffect(() => {
     if (!run?.endedAt || run.id !== startedHere.current) return
     startedHere.current = undefined
-    if (run.exit !== 0 || run.error) return flash(runStatus(run, Date.now()).label)
+    if (run.exit !== 0 || run.error) return flash(run.tail ?? runStatus(run, Date.now()).label)
     if (run.summary) flash(run.summary)
     else if (run.command === 'failed-syncs') flash(`${n} failed sync${n === 1 ? '' : 's'}`)
   }, [run?.endedAt])
@@ -108,19 +108,19 @@ export function App() {
     } catch (e) { flash((e as Error).message) }
   }
   const cancel = () => call({ type: 'cancel' }).catch(e => flash((e as Error).message))
-  const showOutput = () => push({ kind: 'output' })
 
-  const common = { run, now, ready, exec, cancel, showOutput }
+  const common = { run, now, ready, exec, cancel }
   let body: ReactNode = null
   if (!loaded) body = null
   else if (view.kind === 'settings') body = <SettingsView settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} />
-  else if (view.kind === 'output') body = <div className="pane"><Terminal output={output} run={run} now={now} onCancel={cancel} /></div>
   else if (hostProblem(host)) body = <HostSetup host={host} />
   else if (view.kind === 'home') body = <Home pins={pins} failedSyncs={fs} now={now} open={(k: HomeTarget) => push({ kind: k })} openProject={openProject} />
   else if (view.kind === 'failed') body = <FailedView fs={fs} {...common} />
   else if (view.kind === 'projects') body = <ProjectsView projects={projects} pins={pins} query={projectsQuery} setQuery={setProjectsQuery} openProject={openProject} pin={pin} {...common} />
   else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} {...common} />
   else if (view.kind === 'fitting') body = <FittingRoomsView page={fittingRooms} query={fitQuery} setQuery={setFitQuery} openProject={openProject} {...common} />
+  else if (view.kind === 'new-project') body = <NewProjectView search={userSearch} {...common}
+    onCreated={p => setStack(s => [...s.slice(0, -1), { kind: 'project', project: p }])} />
   else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections} members={projectMembers} userSearch={userSearch}
     pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} {...common} />
 
@@ -140,9 +140,7 @@ export function App() {
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
           <h1 title={title}>{title}</h1>
           {ENV === 'stag' && <span className="env-chip" title="staging-app.refit.ai: every command runs on the REFIT_STAG database">STAG</span>}
-          {view.kind !== 'output' && view.kind !== 'settings' && (
-            <button className="icon-btn" aria-label="Output" title="Raw output of the last run" data-live={running} onClick={showOutput}><Icon d="terminal" /></button>
-          )}
+          {view.kind === 'projects' && <IconBtn icon="plus" label="New project" onClick={() => push({ kind: 'new-project' })} />}
           {view.kind !== 'settings' && <IconBtn icon="gear" label="Settings" onClick={() => push({ kind: 'settings' })} />}
           <IconBtn icon="x" label="Close" onClick={() => setOpen(false)} />
         </header>

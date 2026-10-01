@@ -1,10 +1,20 @@
 import { connect, startRun, cancelRun, closeOrphanRun } from './host'
-import type { HostState, Req } from './api'
+import { MAX_TABS, type HostState, type Req } from './api'
 import type { FailedSyncs } from './failed-syncs'
 import { DEFAULTS, type Settings } from './themes'
 
 // The drawer is a content script; it reads host/output from storage.session, which is worker-only by default.
 chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
+
+// Opens Refit connection pages in background tabs (the drawer's "Open in Refit" for selected connections; Refit's
+// own delete dialog lives there). The page's popup blocker would stop more than one window.open, so the worker
+// does it, and only for URLs shaped like connectionUrl() builds them.
+const CONNECTION_PAGE = /^https:\/\/(?:staging-)?app\.refit\.ai\/[0-9a-f-]{36}\/datasources\/(?:service|file)\/[0-9a-f-]{36}$/i
+async function openTabs(urls: unknown) {
+  if (!Array.isArray(urls) || urls.length > MAX_TABS || !urls.every(u => typeof u === 'string' && CONNECTION_PAGE.test(u)))
+    throw new Error(`Can only open up to ${MAX_TABS} Refit connection pages`)
+  for (const url of urls) await chrome.tabs.create({ url, active: false })
+}
 
 async function handle(req: Req): Promise<unknown> {
   switch (req.type) {
@@ -12,6 +22,7 @@ async function handle(req: Req): Promise<unknown> {
     case 'cancel': return cancelRun()
     case 'hostStatus': connect(); return
     case 'openOptions': return chrome.runtime.openOptionsPage()
+    case 'openTabs': return openTabs(req.urls)
   }
 }
 

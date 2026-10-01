@@ -69,6 +69,26 @@ export const PARAMS = {
   sort: ENUM('active', 'name', 'recent', 'status', 'service'),
   user_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   role: ENUM('admin', 'editor', 'viewer'), // refit_user_role values
+  // create-project
+  name: v => { // project name: hex of UTF-8, like q, but must not be blank (project has CHECK char_length(name) > 0)
+    if (!/^(?:[0-9a-f]{2}){1,200}$/.test(v)) throw new Error('must be hex-encoded text (1-200 bytes)')
+    if (!Buffer.from(v, 'hex').toString('utf8').trim()) throw new Error('must not be blank')
+    return `convert_from(decode('${v}', 'hex'), 'UTF8')`
+  },
+  project_status: ENUM('ACTIVE', 'PAUSED', 'NEED_PAYMENT'), // project_status values
+  plan: ENUM('BASIC', 'DEMO', 'ENTERPRISE', 'TRIAL'), // project_plan values
+  end_date: v => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v) throw new Error('must be a real YYYY-MM-DD date')
+    return `'${v}'::date`
+  },
+  // extra members as "uuid:role,uuid:role" (0-50), emitted as a VALUES list (or an empty row set)
+  members: v => {
+    if (v === '') return '(SELECT NULL::uuid, NULL::text WHERE false)'
+    const ms = v.split(',').map(m => m.split(':'))
+    if (ms.length > 50 || !ms.every(([id, role, x]) => UUID.test(id ?? '') && ['admin', 'editor', 'viewer'].includes(role) && x === undefined))
+      throw new Error('must be 0-50 comma-separated uuid:role pairs')
+    return `(VALUES ${ms.map(([id, role]) => `('${id.toLowerCase()}'::uuid, '${role}')`).join(', ')})`
+  },
   // search text: hex of the UTF-8 text, decoded by Postgres. SQL matches it with strpos(lower(col), lower(:q)) > 0,
   // a plain substring test with no LIKE wildcards to escape. (Escaping with replace() is out: Tabularis's read-only
   // mode flags "replace(" in larger queries as a write.)
@@ -90,7 +110,21 @@ export const CONNECTIONS = { prod: 'ea7632d2-f563-4d45-80ba-22728c416a40', stag:
 // The only writes tabularis-query.mjs will send, by SQL file, each with the exact shape its statement must have.
 // Everything else must be a single SELECT / WITH. Tabularis still asks for approval in its console before a write.
 const U = "'[0-9a-f-]{36}'"
+const ROLE = "'(?:admin|editor|viewer)'"
+// Exact statement for create-project.sql (whitespace collapsed), with each placeholder standing for the only forms
+// its binder can emit. Kept here, apart from the .sql file, so editing the file can't widen what's allowed.
+const CREATE_PROJECT = "WITH p AS ( INSERT INTO project (name, create_by, status, plan, end_date) VALUES (:name, :user_id, :project_status, :plan, :end_date) RETURNING id ), m AS ( INSERT INTO refit_user_project_relation (user_id, project_id, role) SELECT x.user_id, p.id, x.role FROM p, (SELECT :user_id::uuid AS user_id, 'admin'::text AS role UNION ALL SELECT * FROM :members AS v(user_id, role)) x ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id ), t AS ( UPDATE refit_user SET had_trial = true WHERE id = :user_id AND :plan = 'TRIAL' RETURNING id ) SELECT p.id, (SELECT count(*) FROM m) AS members FROM p"
+const SHAPES = {
+  name: "convert_from\\(decode\\('(?:[0-9a-f]{2})+', 'hex'\\), 'UTF8'\\)",
+  user_id: U,
+  project_status: "'(?:ACTIVE|PAUSED|NEED_PAYMENT)'",
+  plan: "'(?:BASIC|DEMO|ENTERPRISE|TRIAL)'",
+  end_date: "'\\d{4}-\\d{2}-\\d{2}'::date",
+  members: `(?:\\(VALUES \\(${U}::uuid, ${ROLE}\\)(?:, \\(${U}::uuid, ${ROLE}\\))*\\)|\\(SELECT NULL::uuid, NULL::text WHERE false\\))`,
+}
+const shape = sql => new RegExp('^' + sql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/(?<![:\w]):(\w+)\b/g, (m, k) => SHAPES[k] ?? m) + '$', 'i')
 export const WRITES = {
+  'sql/create-project.sql': shape(CREATE_PROJECT),
   'sql/delete-syncs.sql': new RegExp(`^delete from sync_request where status = 'FAIL' and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
   'sql/add-project-user.sql': new RegExp(`^insert into refit_user_project_relation \\(user_id, project_id, role\\) values \\(${U}, ${U}, '(?:admin|editor|viewer)'\\) on conflict \\(project_id, user_id\\) do nothing returning user_id, role$`, 'i'),
 }
@@ -104,6 +138,9 @@ export function checkQuery(sqlFile, query) {
     return true
   }
   if (!/^(select|with)\b/i.test(q)) throw new Error('only a single SELECT is allowed')
+  // A WITH can carry a write (WITH x AS (INSERT …) SELECT …), so a read must not contain any write keyword.
+  // Whole words only: columns like update_at / create_at are fine. Search text arrives as hex, so it can't trip this.
+  if (/\b(insert|update|delete|merge|truncate|drop|alter|create|grant|revoke|copy)\b/i.test(q)) throw new Error('only a single SELECT is allowed (found a write keyword)')
   return false
 }
 const PLACEHOLDER = new RegExp(`(?<![:\\w]):(${Object.keys(PARAMS).join('|')})\\b`, 'g')

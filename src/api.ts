@@ -2,14 +2,16 @@ import type { Line, RunInfo } from './term'
 
 // Commands the UI can ask for. The host's commands.json is the real allowlist; this union just types the UI side.
 export type Command = 'failed-syncs' | 'projects' | 'project-connections' | 'connections' | 'fitting-rooms' | 'delete-syncs'
-  | 'project-members' | 'user-search' | 'add-project-user'
+  | 'project-members' | 'user-search' | 'add-project-user' | 'create-project'
 export type Args = Record<string, string> // validated again by the server against commands.json params
+export const MAX_TABS = 10 // openTabs limit
 
 export type Req =
   | { type: 'run'; command: Command; args?: Args }
   | { type: 'cancel' }
   | { type: 'hostStatus' } // connect (or reconnect) to the host if not connected; the state lands in storage
   | { type: 'openOptions' }
+  | { type: 'openTabs'; urls: string[] } // Refit connection pages only, at most MAX_TABS (checked in background.ts)
 
 // chrome.storage.session `host`
 export type HostState =
@@ -21,7 +23,7 @@ export type HostState =
   | { state: 'down'; error: string; retryAt?: number } // host crashed or commands.json is broken
 
 // chrome.storage.local `run`: the latest run's summary
-export type Run = RunInfo & { id: string; command: Command; args?: Args; summary?: string } // summary: a one-line result, e.g. "Deleted 3"
+export type Run = RunInfo & { id: string; command: Command; args?: Args; summary?: string; result?: Args; tail?: string } // summary: one-line result ("Deleted 3"); result: ids it made; tail: last stderr line of a failed run
 // chrome.storage.session `output`: that run's terminal lines
 export type Output = { runId: string; lines: Line[]; dropped: number }
 

@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildArgv, decoder, encode, takeChunks } from './protocol.mjs'
+import { bindUuid, buildArgv, decoder, encode, takeChunks } from './protocol.mjs'
 
 // framing round trip, including a frame split across reads and two frames in one read
 const got = []
@@ -33,6 +33,15 @@ assert.throws(() => buildArgv(spec, { env: ['prod'] }), /Missing param/)
 assert.throws(() => buildArgv(spec, { other: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, { __proto__: { a: 1 }, b: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, 'x'), /object/)
+
+// SQL placeholder: only a real UUID gets in, and only into a query that asks for one
+const q = "SELECT 1 FROM c WHERE c.project_id = ':project_id'"
+assert.equal(bindUuid(q, '799A63F3-235C-46CE-9141-12E28915539F'), "SELECT 1 FROM c WHERE c.project_id = '799a63f3-235c-46ce-9141-12e28915539f'")
+assert.throws(() => bindUuid(q, "x' OR '1'='1"), /UUID/)
+assert.throws(() => bindUuid(q, '799a63f3-235c-46ce-9141-12e28915539f; DROP TABLE x'), /UUID/)
+assert.throws(() => bindUuid(q, undefined), /UUID/)
+assert.throws(() => bindUuid('SELECT 1', '799a63f3-235c-46ce-9141-12e28915539f'), /no project id/)
+assert.equal(bindUuid('SELECT 1', undefined), 'SELECT 1')
 
 // end to end: Chrome's side of host.mjs (the relay) -> unix socket -> server.mjs
 const dir = mkdtempSync(join(tmpdir(), 'refit-host-'))

@@ -1,0 +1,66 @@
+{
+  "columns": [
+    "id",
+    "name",
+    "status",
+    "plan",
+    "connections",
+    "failed",
+    "last_sync"
+  ],
+  "rows": [
+    [
+      "783e444b-af8b-449f-a2fe-da9fd845dd8c",
+      "(테스트)E2E 프로젝트",
+      "ACTIVE",
+      "DEMO",
+      3,
+      0,
+      "2024-06-07T05:03:34Z"
+    ],
+    [
+      "af486ea5-cfba-479f-8b68-b3cabf51e611",
+      "(테스트)E2E 프로젝트 TRIAL",
+      "ACTIVE",
+      "TRIAL",
+      0,
+      0,
+      null
+    ],
+    [
+      "280b45be-9a38-40d1-a9a3-be85fa7b9f01",
+      "(테스트)ReFit 데모 프로젝트",
+      "ACTIVE",
+      "BASIC",
+      27,
+      0,
+      "2026-03-30T02:10:56Z"
+    ],
+    [
+      "e37e7324-d1f1-4d63-b7b9-7413542fdc65",
+      ".",
+      "PAUSED",
+      "BASIC",
+      0,
+      0,
+      null
+    ],
+    [
+      "e4a3a3ec-1c40-4c43-9db6-b76669346540",
+      "AILabs_SK이노베이션",
+      "ACTIVE",
+      "BASIC",
+      6,
+      0,
+      "2026-10-01T01:01:28Z"
+    ]
+  ],
+  "affected_rows": 0,
+  "truncated": false,
+  "pagination": {
+    "page": 1,
+    "page_size": 1000,
+    "total_rows": null,
+    "has_more": false
+  }
+}

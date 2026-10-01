@@ -16,7 +16,10 @@ bash .claude/skills/ui-verify/shoot.sh popup output     # one surface, chosen mo
 H=600 bash .claude/skills/ui-verify/shoot.sh popup many # popup height check (Chrome caps popups at 600px)
 ```
 
-Modes: `results` (default), `output` (a run in progress), `never` (not run yet), `zero` (no failures), `error` (last run failed, banner over the last good rows), `offline` (relay installed, `pnpm server` not running), `missing` / `forbidden` (host setup state), `settings`, `many` (30 rows, truncated). Add `-light` for Claude Paper light, e.g. `results-light`. Drawer-only hash flag: `#results&expand` expands the second reason.
+Mode names are `<data>[-nav=<view>][-q=<search>][-light]`, e.g. `results-nav=projects-q=skin` or `results-nav=project-light`.
+- Data: `results` (default), `output` (a run in progress), `never` (nothing fetched yet), `zero` (no failures), `error` (last run failed, banner over the last good rows), `loading` (projects being fetched, skeleton), `offline` (relay installed, `pnpm server` not running), `missing` / `forbidden` (host setup state), `settings`, `many` (30 failed rows, truncated).
+- Drawer nav (mock.html clicks through): `home` (default), `failed`, `projects`, `project` (opens the first project), `output`. `-q=` types into the projects search. Hash flag `expand` expands the second reason.
+- Popup modes use the data part only (`output`, `settings` click through).
 
 Then open the PNGs with the Read tool.
 

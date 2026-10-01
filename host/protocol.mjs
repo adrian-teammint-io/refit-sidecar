@@ -56,6 +56,19 @@ export function takeChunks(carry, all, max = MAX_CHUNK) {
   }
 }
 
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Tabularis's run_query has no bind parameters, so a SQL file may hold one quoted placeholder, ':project_id',
+// and it is only ever replaced with a value that is exactly a UUID (no quotes, no spaces, nothing to escape).
+// ponytail: one UUID placeholder; add a name -> validator map if a query ever needs another kind of value
+export function bindUuid(sql, value) {
+  const has = sql.includes("':project_id'")
+  if (!has && value === undefined) return sql
+  if (!has) throw new Error('This query takes no project id')
+  if (typeof value !== 'string' || !UUID.test(value)) throw new Error('project id must be a UUID')
+  return sql.replaceAll("':project_id'", `'${value.toLowerCase()}'`)
+}
+
 // Builds argv from an allowlisted command spec. Params must be declared and match their pattern in full.
 // A placeholder is a whole arg ("{name}"), never spliced into a string, and there is no shell anywhere.
 export function buildArgv(spec, args) {

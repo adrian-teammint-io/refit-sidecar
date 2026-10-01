@@ -1,6 +1,8 @@
 // Lucide-style paths: 24 viewBox, stroke 1.8, currentColor. Shared by the drawer, popup and settings page.
 export const ICONS = {
   terminal: 'M4 17l6-6-6-6M12 19h8',
+  chevron: 'M9 18l6-6-6-6',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3',
   play: 'M7 4.5v15l12-7.5Z',
   stop: 'M7 7h10v10H7Z',
   refresh: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',

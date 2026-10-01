@@ -8,7 +8,7 @@ chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONT
 
 async function handle(req: Req): Promise<unknown> {
   switch (req.type) {
-    case 'run': return startRun(req.command)
+    case 'run': return startRun(req.command, req.args)
     case 'cancel': return cancelRun()
     case 'hostStatus': connect(); return
     case 'openOptions': return chrome.runtime.openOptionsPage()

@@ -1,10 +1,11 @@
 import type { Line, RunInfo } from './term'
 
 // Commands the UI can ask for. The host's commands.json is the real allowlist; this union just types the UI side.
-export type Command = 'failed-syncs'
+export type Command = 'failed-syncs' | 'projects' | 'project-connections'
+export type Args = Record<string, string> // validated again by the server against commands.json params
 
 export type Req =
-  | { type: 'run'; command: Command }
+  | { type: 'run'; command: Command; args?: Args }
   | { type: 'cancel' }
   | { type: 'hostStatus' } // connect (or reconnect) to the host if not connected; the state lands in storage
   | { type: 'openOptions' }
@@ -19,7 +20,7 @@ export type HostState =
   | { state: 'down'; error: string; retryAt?: number } // host crashed or commands.json is broken
 
 // chrome.storage.local `run`: the latest run's summary
-export type Run = RunInfo & { id: string; command: Command }
+export type Run = RunInfo & { id: string; command: Command; args?: Args }
 // chrome.storage.session `output`: that run's terminal lines
 export type Output = { runId: string; lines: Line[]; dropped: number }
 

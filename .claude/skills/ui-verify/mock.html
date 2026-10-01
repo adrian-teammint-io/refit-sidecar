@@ -20,10 +20,18 @@ setTimeout(() => {
   const s = document.querySelector('refit-sidecar').shadowRoot
   if (/closed/.test(location.hash)) return
   s.querySelector('.launcher').click()
+  const rows = () => s.querySelectorAll('.cmd-row')
+  const type = (input, v) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(input, v); input.dispatchEvent(new Event('input', { bubbles: true })) }
   setTimeout(() => {
-    if (__MODE === 'output') s.querySelectorAll('.tabs .segmented button')[1].click()
-    if (__MODE === 'settings') s.querySelector('[aria-label="Settings"]').click()
-    if (/expand/.test(location.hash)) s.querySelectorAll('.sync-reason')[1].click()
+    if (__MODE === 'settings') return s.querySelector('[aria-label="Settings"]').click()
+    if (__MODE === 'output' || __NAV === 'output') return s.querySelector('[aria-label="Output"]').click()
+    if (__NAV === 'failed') rows()[1].click()
+    if (__NAV === 'projects' || __NAV === 'project') rows()[0].click()
+    setTimeout(() => {
+      if (__NAV === 'projects' && __Q) type(s.querySelector('.search input'), __Q)
+      if (__NAV === 'project') s.querySelector('.proj').click()
+      if (/expand/.test(location.hash)) s.querySelectorAll('.sync-reason')[1].click()
+    }, 200)
   }, 300)
 }, 300)
 </script><script src="content.js"></script></body></html>

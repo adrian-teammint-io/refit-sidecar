@@ -1,0 +1,102 @@
+{
+  "columns": [
+    "id",
+    "project_id",
+    "name",
+    "kind",
+    "service",
+    "data_start",
+    "data_end",
+    "status",
+    "sync_type",
+    "last_sync",
+    "reason",
+    "display_reason",
+    "failed"
+  ],
+  "rows": [
+    [
+      "035665b0-ff98-4543-ad15-0d4d9d8dbdf7",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      "Criteo_고객어트리뷰션_csv",
+      "FILE",
+      null,
+      "2025-06-10",
+      "2025-06-30",
+      "SUCCESS",
+      "FILE_ADD",
+      "2025-07-01T00:30:42Z",
+      null,
+      null,
+      0
+    ],
+    [
+      "ce8237a9-a30b-4dd9-958e-44c0b9dcbec0",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      "GA4_이벤트이름",
+      "SERVICE",
+      "GOOGLE_ANALYTICS",
+      "2025-08-22",
+      "2026-09-28",
+      "FRAGMENTED",
+      "SCHEDULED",
+      "2026-10-01T07:07:34Z",
+      null,
+      null,
+      0
+    ],
+    [
+      "63f012fe-ec29-4f08-a649-d9067b55b1ac",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      " [SK-US]OLIVEYOUNG-Global(협력광고)",
+      "SERVICE",
+      "META",
+      "2025-03-21",
+      "2026-09-30",
+      "SUCCESS",
+      "MANUAL",
+      "2026-10-01T01:06:38Z",
+      "",
+      null,
+      0
+    ],
+    [
+      "3679afdb-37ca-4751-af08-d2813d326c2d",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      "(미활용) Google_PH(Shopee)",
+      "SERVICE",
+      "GOOGLE_ADS",
+      "2025-03-01",
+      "2026-09-30",
+      "SUCCESS",
+      "SCHEDULED",
+      "2026-09-30T19:06:41Z",
+      null,
+      null,
+      0
+    ],
+    [
+      "e9888e67-67a4-4be9-8e7c-49b467b116fb",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      "(미활용) SKIN1004 _Indonesia_Shopee (신규)",
+      "SERVICE",
+      "GOOGLE_ADS",
+      "2025-12-28",
+      "2026-09-30",
+      "SUCCESS",
+      "MANUAL",
+      "2026-10-01T01:00:16Z",
+      "",
+      null,
+      0
+    ]
+  ],
+  "affected_rows": 0,
+  "truncated": false,
+  "pagination": {
+    "page": 1,
+    "page_size": 1000,
+    "total_rows": null,
+    "has_more": false
+  }
+}

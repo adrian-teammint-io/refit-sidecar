@@ -1,9 +1,18 @@
 # Refit Sidecar
 
-Chrome MV3 extension for app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. For now there is one command, `failed-syncs`, which lists every prod `sync_request` with status `FAIL`. UI and conventions are copied from `~/personal-projects/claude-sidecar`.
+Chrome MV3 extension for app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Commands (all read-only SELECTs on prod through Tabularis):
+- `projects`: every project with its connection count, FAIL count and last sync (about 3s)
+- `project-connections <project uuid>`: one project's connections, each with its newest sync_request (about 4s)
+- `failed-syncs`: every `sync_request` with status `FAIL` UI and conventions are copied from `~/personal-projects/claude-sidecar`.
 
 Surfaces:
-1. **Drawer**, injected into app.refit.ai (closed shadow DOM): Results (parsed failed-sync cards with a link to each connection page) and Output (raw terminal). Run / Cancel, launcher with a count badge, toast when a run started here finishes.
+1. **Drawer**, injected into app.refit.ai (closed shadow DOM). It is a stack of views (`content/App.tsx`), and Back or Esc pops one:
+   - **Home**: the command list (`Projects`, `Failed syncs`), each with its cached summary.
+   - **Projects**: search box (every word must match name, id or plan) + Active/Paused filter over the cached list. It auto-loads on first open; Refresh re-runs. Clicking a project pushes:
+   - **Project**: its connections (failing first) with last sync status, reason, FAIL count and a link to each connection, plus **Open in Refit** (`app.refit.ai/<project id>`). Cached per project.
+   - **Failed syncs**: parsed failed-sync cards; **Fetch FAIL syncs** runs it.
+   - **Output**: the raw terminal of the last run, from the header's `>_` button in any view.
+   - Launcher with the failed count, and a toast when a run started from this tab finishes.
 2. **Toolbar icon + popup**: last run summary (count, exit status, duration), the 4 newest failures, raw output, settings. Badge = failed count (red), `!` (amber) when the native host isn't installed.
 3. **Settings page**: native host setup with this extension's id filled in, plus live server status.
 
@@ -40,6 +49,8 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
   - Relay → worker, unsolicited: `{id: 'status', server: 'up' | 'down'}` whenever the terminal server appears or goes away (the relay retries the socket every 1s). On `up`, the worker sends `hello` to get the command list. While the server is down, the relay rejects runs with a "start pnpm server" error.
   - `hello` is an addition to the original spec: it lists the server's commands.
 - **Chunking**: the server sends whole lines in chunks of at most 64K chars (`MAX_CHUNK` in `protocol.mjs`). That keeps every message under Chrome's 1 MB host → extension limit even when every character is JSON-escaped. A partial line is flushed after 100 ms idle or at stream end.
+- **Results** (`storage.local`): `failedSyncs`, `projects`, `projectConnections` (project id → last fetch, newest `MAX_CACHED_PROJECTS` kept). A failed run keeps the last good rows and adds `error`.
+- **One command at a time**: a view that auto-loads while another command runs shows "Waiting: … is running" and retries when that run ends.
 - **Output buffer**: the worker strips ANSI and handles `\r` redraws (`term.ts`). It keeps the last `MAX_LINES` (2000) lines and counts the dropped ones, and writes `output` to `storage.session` at most every 120 ms. Raw stdout (up to 8 MB) is kept separately for the parser.
 - **Lifecycle** (`HostState` in `api.ts`):
   - `offline`: relay up, no `pnpm server` running. Flips to `ready` by itself when the server starts, and back when it stops (Ctrl+C).
@@ -64,10 +75,12 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
 
 ## Adding a command
 
-1. Add an entry to `host/commands.json`. Edits apply on the next run; no reinstall needed.
+1. Add an entry to `host/commands.json` (edits apply on the next run; no reinstall needed). For a query: a `sql/*.sql` file run by `tabularis-query.mjs`.
+   - Tabularis has no bind parameters. The only placeholder is a quoted `':project_id'`, filled by `bindUuid()` (protocol.mjs) with a strict UUID. Declare the param with a UUID `pattern` too, so the server rejects bad input before spawning.
+   - For another kind of value, extend `bindUuid` into a name → validator map. Never splice free text into SQL.
 2. Add its name to `Command` in `src/api.ts`.
-3. If the UI should show parsed results: write a pure parser module plus `*.test.ts` against captured output in `src/samples/`, call it from `finish()` in `src/host.ts`, and store the result under its own `storage.local` key.
-4. Add a fixture to `.claude/skills/ui-verify/stub.js` and screenshot.
+3. Parse: write a pure parser with `parseTable()` (`src/table.ts`, which looks columns up by name, turns `""` into null for nullable columns, and checks numbers) plus a `*.test.ts` against captured output in `src/samples/`. Store the result in `storeResult()` in `src/host.ts`, under its own `storage.local` key, and add that key to `KEYS` in `shared/store.ts`.
+4. UI: add a view in `content/views.tsx` and a row on `Home`, add the view to `View` and `REFRESH` in `content/App.tsx`, then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
 
 ## Codebase structure
 
@@ -78,7 +91,7 @@ host/
   protocol.mjs          pure: socket path, framing, chunking, argv building (tested in host.test.mjs)
   tabularis-query.mjs   one SELECT through `tabularis --mcp` (JSON-RPC over stdio); prints result JSON to stdout, progress to stderr
   commands.json         the allowlist
-  sql/failed-syncs.sql  FAIL rows joined to connection, project, service_connection
+  sql/                  failed-syncs.sql, projects.sql, project-connections.sql (':project_id' placeholder)
   install.mjs           install-host / uninstall-host
 public/manifest.json    MV3 manifest (nativeMessaging, content script on https://app.refit.ai/*)
 src/
@@ -86,11 +99,13 @@ src/
   background.ts         worker: message router, badge
   host.ts               worker: connectNative port, run lifecycle, output buffer, failedSyncs parse/store
   term.ts               pure: ANSI strip, line splitting, line cap, durations, run status
-  failed-syncs.ts       pure: parser, connection URL, labels
+  table.ts              pure: Tabularis {columns, rows} reader shared by all parsers
+  failed-syncs.ts       pure: failed-syncs parser, connection/project URLs, labels
+  projects.ts           pure: projects + project-connections parsers, project search, per-project cache cap
   samples/              captured command output for parser tests
   themes.ts ui.css      design system (copied from claude-sidecar; Settings = theme, mode, badge)
   shared/               controls, icons, store (useStore/useDark/useNow), Terminal, SyncList, HostSetup
-  content/              drawer: main.tsx (shadow root), App.tsx, Settings.tsx, styles.css
+  content/              drawer: main.tsx (shadow root), App.tsx (view stack, header), views.tsx (Home, Projects, Project, Failed), Settings.tsx, styles.css
   popup/                main.tsx, PopupSettings.tsx, popup.css
   options.tsx           settings page (host setup)
 .claude/skills/         ui-system, ui-verify

@@ -1,9 +1,11 @@
 // Fake chrome.* for screenshots of the drawer (mock.html) and popup (popup.html), no extension needed.
 // State comes from the URL: mock.html#<mode> or popup.html?m=<mode>, plus "light" anywhere in it for Claude Paper light.
-// Modes: results (default), output (a run in progress), never (not run yet), zero (no failures), error (last run failed),
-//        offline (pnpm server not running), missing (host not installed), forbidden, settings, many (30 rows: overflow/limit checks).
+// Data modes: results (default), output (a run in progress), never (nothing fetched yet), zero (no failures),
+//   error (last run failed), loading (projects list being fetched), offline (pnpm server not running),
+//   missing (host not installed), forbidden, settings, many (30 failed rows: overflow/limit checks).
+// Drawer navigation (mock.html only): nav=home (default) | failed | projects | project | output, q=<search text>.
 const Q = location.hash.slice(1) + '&' + location.search.slice(1)
-const MODE = (Q.match(/(?:^|[&?])m?=?(output|never|zero|error|offline|missing|forbidden|settings|many|results)/) || [])[1] || 'results'
+const MODE = (Q.match(/(?:^|[&?])m?=?(output|never|zero|error|loading|offline|missing|forbidden|settings|many|results)/) || [])[1] || 'results'
 const LIGHT = /light/.test(Q)
 const now = Date.now()
 const uuid = n => `${String(n).padStart(8, '0')}-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -27,13 +29,37 @@ const lines = [
   ...JSON.stringify({ columns: ['id', 'connection_id', 'project_id', 'project', 'name', 'kind', 'service'], rows: rows.slice(0, 3).map(r => [r.id, r.connectionId, r.projectId, r.project, r.name, r.kind, r.service]) }, null, 2).split('\n').map(t => ({ s: 'out', t })),
 ]
 const running = MODE === 'output'
-const run = MODE === 'never' ? undefined : { id: 'r1', command: 'failed-syncs', startedAt: now - (running ? 3400 : 125000), ...(running ? {} : { endedAt: now - 124000, exit: MODE === 'error' ? 1 : 0 }) }
+const run = MODE === 'never' ? undefined
+  : MODE === 'loading' ? { id: 'p2', command: 'projects', args: {}, startedAt: now - 1800 }
+  : { id: 'r1', command: 'failed-syncs', startedAt: now - (running ? 3400 : 125000), ...(running ? {} : { endedAt: now - 124000, exit: MODE === 'error' ? 1 : 0 }) }
 const failedSyncs = MODE === 'never' ? undefined : { at: now - 124000, runId: 'r1', rows: MODE === 'zero' ? [] : rows, truncated: MODE === 'many', ...(MODE === 'error' ? { error: 'Command failed (exit 1). See Output.' } : {}) }
+const P = (i, name, status, plan, connections, failed, mins) => ({ id: uuid(900 + i), name, status, plan, connections, failed, lastSync: mins === null ? null : new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z' })
+const projectRows = [
+  P(0, '팀민트_크레이버', 'ACTIVE', 'BASIC', 93, 1, 3), P(1, 'Sample Brand KR', 'ACTIVE', 'BASIC', 27, 3, 12), P(2, 'Sample Brand JP', 'ACTIVE', 'TRIAL', 8, 1, 180),
+  P(3, 'Sample Agency', 'ACTIVE', 'BASIC', 41, 0, 25), P(4, 'SKIN1004 USA', 'ACTIVE', 'BASIC', 19, 0, 40), P(5, 'SKIN1004 Indonesia', 'ACTIVE', 'BASIC', 12, 0, 90),
+  P(6, '(테스트)E2E 프로젝트', 'ACTIVE', 'DEMO', 3, 0, 700000), P(7, 'Old Client', 'PAUSED', 'BASIC', 5, 0, 200000), P(8, '.', 'PAUSED', 'BASIC', 0, 0, null),
+  P(9, 'AILabs Sample', 'ACTIVE', 'BASIC', 6, 0, 400),
+]
+const C = (i, name, kind, service, status, syncType, mins, start, end, reason, failed) => ({
+  connectionId: uuid(i + 1), projectId: uuid(900), name, kind, service, start, end, status, syncType,
+  lastSync: new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z', reason, displayReason: null, failed })
+const connRows = [
+  C(0, 'TEST', 'SERVICE', 'META', 'FAIL', 'MANUAL', 22, '2026-08-31', '2026-09-30', "JSONDecodeError('Extra data: line 1 column 68008 (char 68007)')", 1),
+  C(1, 'GA4_이벤트이름', 'SERVICE', 'GOOGLE_ANALYTICS', 'FRAGMENTED', 'SCHEDULED', 30, '2025-08-22', '2026-09-28', null, 0),
+  C(2, 'Google_US', 'SERVICE', 'GOOGLE_ADS', 'SUCCESS', 'SCHEDULED', 760, '2025-03-01', '2026-09-30', null, 0),
+  C(3, 'LIVE GMV', 'FILE', null, 'SUCCESS', 'FILE_ADD', 400, '1970-01-01', '2026-09-30', null, 0),
+  C(4, '[USA] SKIN1004', 'SERVICE', 'TIKTOK', 'SUCCESS', 'SCHEDULED', 150, '2025-09-22', '2026-09-30', null, 2),
+  C(5, 'NEW 캠페인명', 'SERVICE', 'GOOGLE_SHEET', 'SUCCESS', 'MANUAL', 380, null, null, null, 0),
+  C(6, 'SKIN1004_Malaysia_Shopee_Local', 'SERVICE', 'META', 'SUCCESS', 'MANUAL', 390, '2025-08-08', '2026-09-30', null, 0),
+  C(7, 'Snapchat', 'FILE', null, 'SUCCESS', 'FILE_ADD', 420, null, null, null, 0),
+]
+const projects = MODE === 'never' || MODE === 'loading' ? undefined : { at: now - 300000, runId: 'p1', rows: projectRows }
+const projectConnections = MODE === 'never' ? undefined : { [uuid(900)]: { at: now - 60000, runId: 'c1', rows: connRows } }
 const host = MODE === 'offline' ? { state: 'offline' }
   : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
-  : { state: 'ready', commands: ['failed-syncs'] }
-const local = { settings: LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }, run, failedSyncs }
+  : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections'] }
+const local = { settings: LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }, run, failedSyncs, projects, projectConnections }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).map(k => [k, data[k]]).filter(([, v]) => v !== undefined)), set: async () => {}, remove: async () => {} })
 window.chrome = {
@@ -46,6 +72,8 @@ window.chrome = {
 const attach = Element.prototype.attachShadow
 Element.prototype.attachShadow = function () { return attach.call(this, { mode: 'open' }) }
 window.__MODE = MODE
+window.__NAV = (Q.match(/nav=(\w+)/) || [])[1] || 'home'
+window.__Q = decodeURIComponent((Q.match(/q=([^&]*)/) || [])[1] || '')
 if (location.pathname.endsWith('popup.html')) setTimeout(() => {
   if (MODE === 'output') document.querySelectorAll('.segmented button')[1].click()
   if (MODE === 'settings') document.querySelector('[aria-label="Settings"]').click()

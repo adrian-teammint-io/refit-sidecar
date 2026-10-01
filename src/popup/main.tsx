@@ -28,7 +28,7 @@ function Popup() {
   const theme = vars(settings.theme, dark)
   useEffect(() => { document.documentElement.style.background = theme['--bg'] }, [theme['--bg']])
   const n = fs?.rows.length ?? 0
-  const st = run && runStatus(run, now)
+  const st = run?.command === 'failed-syncs' ? runStatus(run, now) : undefined // this card is about failed-syncs only
 
   async function runIt() {
     setError('')

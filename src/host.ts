@@ -1,9 +1,10 @@
 // Worker side of the native host: owns the one connectNative port (to the relay, host/host.mjs, which forwards to
 // `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
 // They read `host` / `output` (storage.session) and `run` / `failedSyncs` (storage.local).
-import type { Command, HostState, Output, Run } from './api'
+import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
+import { parseProjects, parseProjectConnections, cacheProject, type Projects, type ProjectConnections } from './projects'
 
 export const HOST = 'com.hoan.refit_sidecar' // keep in sync with NAME in host/install.mjs
 const FLUSH_MS = 120 // throttle for storage writes while output streams
@@ -49,19 +50,19 @@ export function connect() {
   return p // the relay reports server status on its own; hello follows once the server is up
 }
 
-export function startRun(command: Command): string {
-  if (current) throw new Error('A command is already running')
+export function startRun(command: Command, args: Args = {}): string {
+  if (current) throw new Error(`Busy: ${current.run.command} is still running`)
   const p = connect()
   const id = crypto.randomUUID()
   current = {
-    run: { id, command, startedAt: Date.now() },
-    out: { runId: id, lines: [{ s: 'sys', t: `$ ${command}` }], dropped: 0 },
+    run: { id, command, args, startedAt: Date.now() },
+    out: { runId: id, lines: [{ s: 'sys', t: `$ ${[command, ...Object.values(args)].join(' ')}` }], dropped: 0 },
     carry: { out: '', err: '' },
     stdout: '',
   }
   chrome.storage.local.set({ run: current.run })
   chrome.storage.session.set({ output: current.out })
-  p.postMessage({ id, type: 'run', command, args: {} })
+  p.postMessage({ id, type: 'run', command, args })
   return id
 }
 
@@ -119,22 +120,36 @@ async function finish(end: Pick<Run, 'exit' | 'signal' | 'error'>) {
   clearTimeout(flushTimer)
   flushTimer = undefined
   await chrome.storage.session.set({ output: c.out })
-  if (run.command === 'failed-syncs') await storeFailedSyncs(run, c.stdout)
+  await storeResult(run, c.stdout)
   await chrome.storage.local.set({ run })
 }
 
-async function storeFailedSyncs(run: Run, stdout: string) {
-  const { failedSyncs: prev } = (await chrome.storage.local.get('failedSyncs')) as { failedSyncs?: FailedSyncs }
-  let next: FailedSyncs
+// Fresh rows on success; otherwise the last good rows stay on screen, flagged with what went wrong.
+function outcome<T extends { error?: string }>(prev: T | undefined, empty: T, run: Run, parse: () => T): T {
   if (run.exit === 0 && !run.error) {
-    try { next = { at: Date.now(), runId: run.id, ...parseFailedSyncs(stdout) } }
-    catch (e) { next = { ...(prev ?? { rows: [], truncated: false, runId: run.id, at: 0 }), error: `Could not read output: ${(e as Error).message}` } }
-  } else {
-    // keep the last good rows on screen, flagged with what went wrong
-    const why = run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit}). See Output.`)
-    next = { ...(prev ?? { rows: [], truncated: false, runId: run.id, at: 0 }), error: why }
+    try { return parse() } catch (e) { return { ...(prev ?? empty), error: `Could not read output: ${(e as Error).message}` } }
   }
-  await chrome.storage.local.set({ failedSyncs: next })
+  return { ...(prev ?? empty), error: run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit}). See Output.`) }
+}
+
+async function storeResult(run: Run, stdout: string) {
+  const at = Date.now()
+  const base = { at: 0, runId: run.id, rows: [] }
+  const s = (await chrome.storage.local.get(['failedSyncs', 'projects', 'projectConnections'])) as {
+    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
+  }
+  if (run.command === 'failed-syncs') {
+    const next = outcome<FailedSyncs>(s.failedSyncs, { ...base, truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))
+    await chrome.storage.local.set({ failedSyncs: next })
+  } else if (run.command === 'projects') {
+    const next = outcome<Projects>(s.projects, base, run, () => ({ at, runId: run.id, rows: parseProjects(stdout) }))
+    await chrome.storage.local.set({ projects: next })
+  } else if (run.command === 'project-connections' && run.args?.project) {
+    const id = run.args.project
+    const cache = s.projectConnections ?? {}
+    const next = outcome<ProjectConnections[string]>(cache[id], base, run, () => ({ at, runId: run.id, rows: parseProjectConnections(stdout) }))
+    await chrome.storage.local.set({ projectConnections: cacheProject(cache, id, { ...next, at: next.at || at }) })
+  }
 }
 
 // A worker restart mid-run loses the port and the in-memory buffer; close the stored run so the UI doesn't spin forever.

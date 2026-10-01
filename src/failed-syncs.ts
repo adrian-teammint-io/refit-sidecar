@@ -43,6 +43,10 @@ export function connectionUrl(r: Pick<FailedSync, 'projectId' | 'connectionId' |
 
 export const projectUrl = (projectId: string) => (UUID.test(projectId) ? `${APP}/${projectId}` : undefined)
 
+// refit-app-2 route: /_auth/$projectId/fitting/$fittingRoomId
+export const fittingRoomUrl = (r: { projectId: string; id: string }) =>
+  UUID.test(r.projectId) && UUID.test(r.id) ? `${APP}/${r.projectId}/fitting/${r.id}` : undefined
+
 export const platform = (r: Pick<FailedSync, 'service' | 'kind'>) => r.service ?? r.kind
 
 // "2026-08-31 → 2026-09-30", or a single date when start == end.

@@ -2,6 +2,9 @@
 export const ICONS = {
   terminal: 'M4 17l6-6-6-6M12 19h8',
   chevron: 'M9 18l6-6-6-6',
+  pin: 'M12 17v5M9 3h6M10 3v6l-4 5h12l-4-5V3',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
+  flow: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3',
   play: 'M7 4.5v15l12-7.5Z',
   stop: 'M7 7h10v10H7Z',

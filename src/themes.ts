@@ -19,8 +19,9 @@ export type Settings = {
   theme: string
   mode: Mode
   badge: boolean // toolbar badge shows the failed-sync count
+  drawerWidth: number // px, dragged from the drawer's left edge
 }
-export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true }
+export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440 }
 
 export function vars(theme: string, dark: boolean): Record<string, string> {
   const [bg, surface, raised, text, muted, accent, onAccent] = (THEMES[theme] ?? THEMES.graphite)[dark ? 'dark' : 'light']

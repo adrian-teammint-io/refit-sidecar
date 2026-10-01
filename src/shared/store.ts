@@ -3,14 +3,18 @@
 import { useEffect, useState } from 'react'
 import { call, type HostState, type Output, type Run } from '../api'
 import type { FailedSyncs } from '../failed-syncs'
-import type { Projects, ProjectConnections } from '../projects'
+import type { Projects, ProjectConnections, Connections, FittingRooms, Pins } from '../projects'
 import { DEFAULTS, type Settings } from '../themes'
 
 export type Store = {
   settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean
   failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
+  connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins
 }
-const KEYS = { local: ['settings', 'run', 'failedSyncs', 'projects', 'projectConnections'], session: ['host', 'output'] } as const
+const KEYS = {
+  local: ['settings', 'run', 'failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'],
+  session: ['host', 'output'],
+} as const
 
 export function useStore(): Store {
   const [s, set] = useState<Store>({ settings: DEFAULTS, loaded: false })

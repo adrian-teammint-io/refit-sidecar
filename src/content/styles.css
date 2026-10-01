@@ -37,6 +37,17 @@
   visibility: hidden;
 }
 .drawer[data-open='true'] { transform: none; visibility: visible; transition: transform 300ms var(--ease-drawer); }
+.drawer[data-resizing='true'] { transition: none; cursor: col-resize; user-select: none; }
+
+/* Left-edge resize handle: a wide invisible hit area with a thin line that shows on hover / focus / drag */
+.resize { position: absolute; top: 0; bottom: 0; left: 0; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; }
+.resize::after {
+  content: ''; position: absolute; top: 50%; left: 2px; width: 3px; height: 40px; margin-top: -20px; border-radius: 3px;
+  background: var(--line-strong); opacity: 0; transition: opacity 150ms ease, background-color 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) { .resize:hover::after { opacity: 1; } }
+.resize:focus-visible { outline: none; }
+.resize:focus-visible::after, .drawer[data-resizing='true'] .resize::after { opacity: 1; background: var(--accent); }
 
 .head { display: flex; align-items: center; gap: 4px; padding: 12px 12px 8px 14px; }
 .head h1 { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -61,6 +72,7 @@
   animation: rise 220ms var(--ease-out) both;
 }
 .cmd-row:nth-child(2) { animation-delay: 40ms; }
+.cmd-row:nth-child(3) { animation-delay: 80ms; }
 @media (hover: hover) and (pointer: fine) { .cmd-row:hover { border-color: var(--line-strong); background: color-mix(in oklab, var(--surface) 92%, var(--text)); } }
 .cmd-row:active { transform: scale(0.985); }
 .cmd-icon { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
@@ -89,7 +101,25 @@
 .search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); height: 100%; }
 .search input::placeholder { color: var(--muted); }
 .icon-btn.sm { width: 26px; height: 26px; border-radius: 7px; }
-.filters .segmented button { height: 26px; font-size: 12px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters .segmented { flex: 1 1 160px; }
+.filters .segmented button { height: 26px; font-size: 12px; padding: 0 8px; white-space: nowrap; }
+
+/* Browse results: dimmed while a new query loads; load more at the end */
+.results { display: flex; flex-direction: column; gap: 10px; transition: opacity 150ms ease; }
+.results[data-stale='true'] { opacity: 0.55; }
+.load-more { align-self: center; gap: 8px; }
+.load-more .muted { font-size: 11px; font-weight: 400; }
+.link-btn {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; max-width: 100%; padding: 2px 4px; margin: -2px -4px;
+  border-radius: 6px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) { .link-btn:hover { color: var(--text); background: var(--hover); } }
+.conn-item { display: flex; flex-direction: column; gap: 6px; animation: rise 220ms var(--ease-out) both; animation-delay: calc(var(--i) * 20ms); }
+.conn-item > .sync { animation: none; }
+.group-head { padding-top: 8px; }
+.conn-item:first-child .group-head { padding-top: 0; }
 
 /* Projects list */
 .proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -105,6 +135,12 @@
 .proj-main strong { color: var(--text); font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-main .muted { font-size: 11px; }
 .muted-badge { background: var(--raised); color: var(--muted); }
+.proj-row { display: flex; align-items: center; gap: 2px; }
+.proj-row .proj { flex: 1; min-width: 0; }
+.pin { color: var(--muted); flex-shrink: 0; }
+.pin[aria-pressed='true'] { color: var(--accent); }
+.light .pin[aria-pressed='true'] { color: var(--text); }
+.proj > svg:first-child { flex-shrink: 0; color: var(--accent); }
 
 /* One project */
 .proj-head { display: flex; align-items: flex-start; gap: 10px; padding: 2px 2px 0; }
@@ -151,5 +187,6 @@
 @media (prefers-reduced-motion: reduce) {
   .drawer, .drawer[data-open='true'] { transition: visibility 0s, opacity 150ms ease; transform: none; }
   .drawer:not([data-open='true']) { opacity: 0; }
-  .toast, .cmd-row, .proj-list li, .skel::after, .head .icon-btn[data-live='true']::after { animation: none; }
+  .toast, .cmd-row, .proj-list li, .conn-item, .skel::after, .head .icon-btn[data-live='true']::after { animation: none; }
+  .results, .resize::after, .link-btn { transition: none; }
 }

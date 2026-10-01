@@ -19,9 +19,34 @@
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
         "ea7632d2-f563-4d45-80ba-22728c416a40",
         "sql/projects.sql",
-        "1000"
+        "100",
+        "--q",
+        "{q}",
+        "--status",
+        "{status}",
+        "--sort",
+        "{sort}",
+        "--offset",
+        "{offset}"
       ],
-      "params": {},
+      "params": {
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){0,200}",
+          "default": ""
+        },
+        "status": {
+          "pattern": "all|ACTIVE|PAUSED",
+          "default": "all"
+        },
+        "sort": {
+          "pattern": "active|name|recent",
+          "default": "active"
+        },
+        "offset": {
+          "pattern": "[0-9]{1,5}",
+          "default": "0"
+        }
+      },
       "timeoutMs": 90000
     },
     "project-connections": {
@@ -31,12 +56,81 @@
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
         "ea7632d2-f563-4d45-80ba-22728c416a40",
         "sql/project-connections.sql",
-        "1000",
-        "{project}"
+        "100",
+        "--project_id",
+        "{project}",
+        "--q",
+        "{q}",
+        "--sort",
+        "{sort}",
+        "--offset",
+        "{offset}"
       ],
       "params": {
         "project": {
           "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        },
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){0,200}",
+          "default": ""
+        },
+        "sort": {
+          "pattern": "status|service|name",
+          "default": "status"
+        },
+        "offset": {
+          "pattern": "[0-9]{1,5}",
+          "default": "0"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "connections": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "sql/connections.sql",
+        "100",
+        "--q",
+        "{q}",
+        "--offset",
+        "{offset}"
+      ],
+      "params": {
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){0,200}",
+          "default": ""
+        },
+        "offset": {
+          "pattern": "[0-9]{1,5}",
+          "default": "0"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "fitting-rooms": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "sql/fitting-rooms.sql",
+        "100",
+        "--q",
+        "{q}",
+        "--offset",
+        "{offset}"
+      ],
+      "params": {
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){0,200}",
+          "default": ""
+        },
+        "offset": {
+          "pattern": "[0-9]{1,5}",
+          "default": "0"
         }
       },
       "timeoutMs": 90000

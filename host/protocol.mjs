@@ -58,16 +58,42 @@ export function takeChunks(carry, all, max = MAX_CHUNK) {
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Tabularis's run_query has no bind parameters, so a SQL file may hold one quoted placeholder, ':project_id',
-// and it is only ever replaced with a value that is exactly a UUID (no quotes, no spaces, nothing to escape).
-// ponytail: one UUID placeholder; add a name -> validator map if a query ever needs another kind of value
-export function bindUuid(sql, value) {
-  const has = sql.includes("':project_id'")
-  if (!has && value === undefined) return sql
-  if (!has) throw new Error('This query takes no project id')
-  if (typeof value !== 'string' || !UUID.test(value)) throw new Error('project id must be a UUID')
-  return sql.replaceAll("':project_id'", `'${value.toLowerCase()}'`)
+// Tabularis's run_query has no bind parameters, so SQL files use typed placeholders (:name, unquoted) and this
+// turns each value into SQL that cannot carry anything else. Free text never appears as text: it arrives as hex
+// and is decoded by Postgres, so quotes, backslashes or comments in a search are just characters to match.
+const ENUM = (...vals) => v => { if (!vals.includes(v)) throw new Error(`must be one of ${vals.join(', ')}`); return `'${v}'` }
+export const PARAMS = {
+  project_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
+  offset: v => { if (!/^\d{1,5}$/.test(v)) throw new Error('must be a whole number'); return String(Number(v)) },
+  status: ENUM('all', 'ACTIVE', 'PAUSED'),
+  sort: ENUM('active', 'name', 'recent', 'status', 'service'),
+  // search text: hex of the UTF-8 text, decoded by Postgres. SQL matches it with strpos(lower(col), lower(:q)) > 0,
+  // a plain substring test with no LIKE wildcards to escape. (Escaping with replace() is out: Tabularis's read-only
+  // mode flags "replace(" in larger queries as a write.)
+  q: v => {
+    if (!/^(?:[0-9a-f]{2}){0,200}$/.test(v)) throw new Error('must be hex-encoded text (max 200 bytes)')
+    return `convert_from(decode('${v}', 'hex'), 'UTF8')`
+  },
 }
+const PLACEHOLDER = new RegExp(`(?<![:\\w]):(${Object.keys(PARAMS).join('|')})\\b`, 'g')
+
+// Every placeholder the SQL uses needs a valid value, and every value given must be used by the SQL.
+export function bindParams(sql, values = {}) {
+  const used = new Set([...sql.matchAll(PLACEHOLDER)].map(m => m[1]))
+  for (const k of Object.keys(values)) if (!used.has(k)) throw new Error(`This query takes no ${k}`)
+  const out = {}
+  for (const k of used) {
+    if (typeof values[k] !== 'string') throw new Error(`Missing ${k}`)
+    try { out[k] = PARAMS[k](values[k]) } catch (e) { throw new Error(`${k} ${e.message}`) }
+  }
+  return sql.replace(PLACEHOLDER, (_, k) => out[k])
+}
+
+// Hex of UTF-8 text, the form the q param expects (the extension does the same in src/projects.ts).
+export const toHex = s => Buffer.from(s, 'utf8').toString('hex')
+
+// Drops leading "--" comment lines, so the read-only check sees the first real keyword.
+export const stripLeadingComments = sql => sql.replace(/^(?:\s*--[^\n]*\n)*/, '').trim()
 
 // Builds argv from an allowlisted command spec. Params must be declared and match their pattern in full.
 // A placeholder is a whole arg ("{name}"), never spliced into a string, and there is no shell anywhere.

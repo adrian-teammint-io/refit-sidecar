@@ -25,12 +25,14 @@ setTimeout(() => {
   setTimeout(() => {
     if (__MODE === 'settings') return s.querySelector('[aria-label="Settings"]').click()
     if (__MODE === 'output' || __NAV === 'output') return s.querySelector('[aria-label="Output"]').click()
-    if (__NAV === 'failed') rows()[1].click()
-    if (__NAV === 'projects' || __NAV === 'project') rows()[0].click()
+    // Home rows: Projects, Connections, Fitting rooms, Failed syncs
+    const at = { projects: 0, project: 0, connections: 1, fitting: 2, failed: 3 }[__NAV]
+    if (at !== undefined) rows()[at].click()
     setTimeout(() => {
-      if (__NAV === 'projects' && __Q) type(s.querySelector('.search input'), __Q)
-      if (__NAV === 'project') s.querySelector('.proj').click()
+      if (__NAV !== 'home' && __Q) type(s.querySelector('.search input'), __Q)
+      if (__NAV === 'project') [...s.querySelectorAll('.proj-list')].at(-1).querySelector('.proj').click() // the first unpinned row has cached connections
       if (/expand/.test(location.hash)) s.querySelectorAll('.sync-reason')[1].click()
+      if (/bottom/.test(location.hash)) setTimeout(() => { s.querySelector('.body').scrollTop = 1e6 }, 100)
     }, 200)
   }, 300)
 }, 300)

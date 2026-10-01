@@ -2,8 +2,9 @@
 // State comes from the URL: mock.html#<mode> or popup.html?m=<mode>, plus "light" anywhere in it for Claude Paper light.
 // Data modes: results (default), output (a run in progress), never (nothing fetched yet), zero (no failures),
 //   error (last run failed), loading (projects list being fetched), offline (pnpm server not running),
-//   missing (host not installed), forbidden, settings, many (30 failed rows: overflow/limit checks).
-// Drawer navigation (mock.html only): nav=home (default) | failed | projects | project | output, q=<search text>.
+//   missing (host not installed), forbidden, settings, many (30 rows everywhere + "load more": overflow/limit checks).
+// Drawer navigation (mock.html only): nav=home (default) | failed | projects | project | connections | fitting | output,
+//   q=<search text>, sort=service (project view grouped by service).
 const Q = location.hash.slice(1) + '&' + location.search.slice(1)
 const MODE = (Q.match(/(?:^|[&?])m?=?(output|never|zero|error|loading|offline|missing|forbidden|settings|many|results)/) || [])[1] || 'results'
 const LIGHT = /light/.test(Q)
@@ -30,7 +31,7 @@ const lines = [
 ]
 const running = MODE === 'output'
 const run = MODE === 'never' ? undefined
-  : MODE === 'loading' ? { id: 'p2', command: 'projects', args: {}, startedAt: now - 1800 }
+  : MODE === 'loading' ? { id: 'p2', command: 'projects', args: { q: '', status: 'all', sort: 'active', offset: '0' }, startedAt: now - 1800 }
   : { id: 'r1', command: 'failed-syncs', startedAt: now - (running ? 3400 : 125000), ...(running ? {} : { endedAt: now - 124000, exit: MODE === 'error' ? 1 : 0 }) }
 const failedSyncs = MODE === 'never' ? undefined : { at: now - 124000, runId: 'r1', rows: MODE === 'zero' ? [] : rows, truncated: MODE === 'many', ...(MODE === 'error' ? { error: 'Command failed (exit 1). See Output.' } : {}) }
 const P = (i, name, status, plan, connections, failed, mins) => ({ id: uuid(900 + i), name, status, plan, connections, failed, lastSync: mins === null ? null : new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z' })
@@ -53,13 +54,31 @@ const connRows = [
   C(6, 'SKIN1004_Malaysia_Shopee_Local', 'SERVICE', 'META', 'SUCCESS', 'MANUAL', 390, '2025-08-08', '2026-09-30', null, 0),
   C(7, 'Snapchat', 'FILE', null, 'SUCCESS', 'FILE_ADD', 420, null, null, null, 0),
 ]
-const projects = MODE === 'never' || MODE === 'loading' ? undefined : { at: now - 300000, runId: 'p1', rows: projectRows }
-const projectConnections = MODE === 'never' ? undefined : { [uuid(900)]: { at: now - 60000, runId: 'c1', rows: connRows } }
+// Browse pages: {at, runId, query, rows, hasMore}. The query must equal the view's default or the view re-fetches (and dims).
+// many: 30 rows + hasMore (shows "Load 30 more"). sort=service in the hash: the project's connections grouped by service.
+const MANY = MODE === 'many'
+const BY_SERVICE = /sort=service/.test(Q)
+const page = (runId, query, rows) => ({ at: now - 300000, runId, query, rows, hasMore: MANY })
+const fill = (rows, make) => MANY ? Array.from({ length: 30 }, (_, i) => make(rows[i % rows.length], i)) : rows
+const allProjects = fill(projectRows, (p, i) => ({ ...p, id: uuid(900 + i), name: i < projectRows.length ? p.name : `${p.name} ${i}` }))
+const sortedConns = BY_SERVICE ? [...connRows].sort((a, b) => (a.service ?? a.kind).localeCompare(b.service ?? b.kind) || a.name.localeCompare(b.name)) : connRows
+const projects = MODE === 'never' || MODE === 'loading' ? undefined : page('p1', { q: '', status: 'all', sort: 'active' }, allProjects)
+const projectConnections = MODE === 'never' ? undefined : { [uuid(900)]: page('c1', { q: '', sort: BY_SERVICE ? 'service' : 'status' }, sortedConns) }
+const connections = MODE === 'never' ? undefined : page('n1', { q: '' }, fill(connRows, (c, i) => ({ ...c, connectionId: uuid(i + 1) }))
+  .map((c, i) => ({ ...c, projectId: projectRows[i % 4].id, project: projectRows[i % 4].name })))
+const F = (i, name, p, nodes, outputs, notOk, mins, fitMins) => ({ id: uuid(700 + i), projectId: projectRows[p].id, project: projectRows[p].name, projectStatus: projectRows[p].status,
+  name, nodes, outputs, notOk, updatedAt: new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z', lastFit: fitMins === null ? null : new Date(now - fitMins * 60000).toISOString().slice(0, 19) + 'Z' })
+const fitRows = [
+  F(0, 'SKIN1004JP_RD_2610 (UPDATE)', 2, 32, 24, 0, 40, 40), F(1, 'SKIN1004JP_RD_2607_NEW', 2, 70, 14, 2, 400, 400),
+  F(2, '새 피팅룸', 0, 0, 0, 0, 1500, null), F(3, '[카카오단골가게] Refit RD_260917', 1, 18, 9, 0, 1560, 1560), F(4, 'Legacy weekly report', 7, 1, 1, 1, 90000, 90000),
+]
+const fittingRooms = MODE === 'never' ? undefined : page('f1', { q: '' }, fill(fitRows, (r, i) => ({ ...r, id: uuid(700 + i) })))
+const pins = MODE === 'never' ? undefined : Object.fromEntries([projectRows[1], projectRows[0]].map((p, i) => [p.id, { ...p, pinnedAt: now - i * 1000 }]))
 const host = MODE === 'offline' ? { state: 'offline' }
   : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
-  : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections'] }
-const local = { settings: LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }, run, failedSyncs, projects, projectConnections }
+  : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections', 'connections', 'fitting-rooms'] }
+const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}) }, run, failedSyncs, projects, projectConnections, connections, fittingRooms, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).map(k => [k, data[k]]).filter(([, v]) => v !== undefined)), set: async () => {}, remove: async () => {} })
 window.chrome = {
@@ -70,7 +89,12 @@ window.chrome = {
 }
 // The drawer uses a closed shadow root; open it here so the mock can click into it.
 const attach = Element.prototype.attachShadow
-Element.prototype.attachShadow = function () { return attach.call(this, { mode: 'open' }) }
+// Headless virtual time doesn't reliably advance CSS transitions (the drawer froze faded or off-screen), so turn motion off.
+Element.prototype.attachShadow = function () {
+  const root = attach.call(this, { mode: 'open' })
+  setTimeout(() => root.append(Object.assign(document.createElement('style'), { textContent: '*, *::before, *::after { transition: none !important; animation-duration: 0s !important; animation-delay: 0s !important }' })))
+  return root
+}
 window.__MODE = MODE
 window.__NAV = (Q.match(/nav=(\w+)/) || [])[1] || 'home'
 window.__Q = decodeURIComponent((Q.match(/q=([^&]*)/) || [])[1] || '')

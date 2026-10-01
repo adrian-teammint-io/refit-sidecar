@@ -1,17 +1,23 @@
 # Refit Sidecar
 
 Chrome MV3 extension for app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Commands (all read-only SELECTs on prod through Tabularis):
-- `projects`: every project with its connection count, FAIL count and last sync (about 3s)
-- `project-connections <project uuid>`: one project's connections, each with its newest sync_request (about 4s)
-- `failed-syncs`: every `sync_request` with status `FAIL` UI and conventions are copied from `~/personal-projects/claude-sidecar`.
+- `projects q status sort offset`: projects with connection count, FAIL count and last sync; sort `active` (active first, default) / `name` / `recent`
+- `project-connections project_id q sort offset`: one project's connections, each with its newest sync_request; sort `status` (failing first) / `service` / `name`
+- `connections q offset`: connections across every project, matched on name, service or id
+- `fitting-rooms q offset`: fitting rooms (pipelines), newest edit first, matched on name, project name or id
+- `failed-syncs`: every `sync_request` with status `FAIL`
+
+The four browse commands return batches of 30 (`BATCH` in `src/projects.ts`; the SQL asks for `LIMIT 31` and the extra row only means "there is more"). Each takes about 1s. UI and conventions are copied from `~/personal-projects/claude-sidecar`.
 
 Surfaces:
-1. **Drawer**, injected into app.refit.ai (closed shadow DOM). It is a stack of views (`content/App.tsx`), and Back or Esc pops one:
-   - **Home**: the command list (`Projects`, `Failed syncs`), each with its cached summary.
-   - **Projects**: search box (every word must match name, id or plan) + Active/Paused filter over the cached list. It auto-loads on first open; Refresh re-runs. Clicking a project pushes:
-   - **Project**: its connections (failing first) with last sync status, reason, FAIL count and a link to each connection, plus **Open in Refit** (`app.refit.ai/<project id>`). Cached per project.
+1. **Drawer**, injected into app.refit.ai (closed shadow DOM). It is a stack of views (`content/App.tsx`), and Back or Esc pops one. Drag its left edge (or focus the edge and use arrow keys) to resize, 360 to 1200px. Double-click the edge to reset to 440. The width is saved in `settings.drawerWidth`.
+   - **Home**: Search (`Projects`, `Connections`, `Fitting rooms`), Checks (`Failed syncs`, with its count), then pinned projects.
+   - **Projects**: server-side search (debounced 300ms), a status filter, and a sort (Active first / Name / Recent sync). Pinned projects matching the search are listed first. Click the pin icon to pin or unpin. Clicking a project pushes:
+   - **Project**: pin, **Open in Refit** (`app.refit.ai/<project id>`), and its connections with a search and a sort (Failing first / Service / Name). Sort by service adds a header per platform. Cached per project.
+   - **Connections** / **Fitting rooms**: search everything. Each card links to Refit, and its project name opens that project's view.
    - **Failed syncs**: parsed failed-sync cards; **Fetch FAIL syncs** runs it.
    - **Output**: the raw terminal of the last run, from the header's `>_` button in any view.
+   - Every browse view has a status line (count, refresh, cancel) and **Load 30 more**. Rows dim while a new query loads.
    - Launcher with the failed count, and a toast when a run started from this tab finishes.
 2. **Toolbar icon + popup**: last run summary (count, exit status, duration), the 4 newest failures, raw output, settings. Badge = failed count (red), `!` (amber) when the native host isn't installed.
 3. **Settings page**: native host setup with this extension's id filled in, plus live server status.
@@ -23,7 +29,7 @@ Surfaces:
 | `pnpm dev` | Watch-build into `dist/` (load `dist/` unpacked, hit reload in `chrome://extensions`) |
 | `pnpm build` | Typecheck + production build |
 | `pnpm server` | **The terminal server.** Keep it open: it runs the commands, prints every run live, and streams output back to the page |
-| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
+| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `src/projects.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm install-host <extension id>` | Writes the wrapper `host/refit-sidecar-host` and `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.hoan.refit_sidecar.json` (`allowed_origins` = this id only) |
 | `pnpm uninstall-host` | Removes both |
@@ -49,8 +55,8 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
   - Relay → worker, unsolicited: `{id: 'status', server: 'up' | 'down'}` whenever the terminal server appears or goes away (the relay retries the socket every 1s). On `up`, the worker sends `hello` to get the command list. While the server is down, the relay rejects runs with a "start pnpm server" error.
   - `hello` is an addition to the original spec: it lists the server's commands.
 - **Chunking**: the server sends whole lines in chunks of at most 64K chars (`MAX_CHUNK` in `protocol.mjs`). That keeps every message under Chrome's 1 MB host → extension limit even when every character is JSON-escaped. A partial line is flushed after 100 ms idle or at stream end.
-- **Results** (`storage.local`): `failedSyncs`, `projects`, `projectConnections` (project id → last fetch, newest `MAX_CACHED_PROJECTS` kept). A failed run keeps the last good rows and adds `error`.
-- **One command at a time**: a view that auto-loads while another command runs shows "Waiting: … is running" and retries when that run ends.
+- **Results** (`storage.local`): `failedSyncs`, plus pages `{at, runId, query, rows, hasMore}` for `projects`, `connections` and `fittingRooms`, and for `projectConnections` (by project id, newest `MAX_CACHED_PROJECTS` kept). `mergePage()` appends a run of the same query at the next offset; any other query replaces the page. `pins` holds a project snapshot per pinned id, refreshed whenever that project comes back in a result. A failed run keeps the last good rows and adds `error`.
+- **One command at a time, latest wins** (`startRun` in `host.ts`): while a run is going, the newest request waits, replacing any older waiting one. A request for the *same* command cancels the running one and discards its result, so a search box never waits behind a stale query. `finish()` starts the waiting request. The status line shows "Queued after …".
 - **Output buffer**: the worker strips ANSI and handles `\r` redraws (`term.ts`). It keeps the last `MAX_LINES` (2000) lines and counts the dropped ones, and writes `output` to `storage.session` at most every 120 ms. Raw stdout (up to 8 MB) is kept separately for the parser.
 - **Lifecycle** (`HostState` in `api.ts`):
   - `offline`: relay up, no `pnpm server` running. Flips to `ready` by itself when the server starts, and back when it stops (Ctrl+C).
@@ -76,11 +82,15 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
 ## Adding a command
 
 1. Add an entry to `host/commands.json` (edits apply on the next run; no reinstall needed). For a query: a `sql/*.sql` file run by `tabularis-query.mjs`.
-   - Tabularis has no bind parameters. The only placeholder is a quoted `':project_id'`, filled by `bindUuid()` (protocol.mjs) with a strict UUID. Declare the param with a UUID `pattern` too, so the server rejects bad input before spawning.
-   - For another kind of value, extend `bindUuid` into a name → validator map. Never splice free text into SQL.
+   - Tabularis has no bind parameters. SQL files use unquoted typed placeholders, filled by `bindParams()` (`PARAMS` in protocol.mjs): `:project_id` (strict UUID), `:offset` (int), `:status` / `:sort` (enums), `:q` (hex of UTF-8 text, emitted as `convert_from(decode('…','hex'),'UTF8')`). Every placeholder needs a value and every value must be used. `tabularis-query.mjs` takes them as `--name value` pairs after the row limit. Declare each param in commands.json with a matching `pattern` too, so the server rejects bad input before spawning.
+   - A new kind of value gets a new validator in `PARAMS`. Never splice free text into SQL.
+   - Match search text with `strpos(lower(col), lower(:q)) > 0` (no LIKE wildcards to escape).
+   - **Tabularis read-only mode is ON** for refit-prod and blocks whatever it thinks is a write. It flags `replace(` in larger queries, so never use `replace()` or backslash string literals in SQL files. Leading `--` comments are fine (`stripLeadingComments()`).
+   - Batch queries: `LIMIT 31 OFFSET :offset`. `sync_request` has no index on `connection_id`, so aggregate it in one pass (DISTINCT ON / GROUP BY) instead of a per-row subquery.
+   - **Never test a query against prod without asking Hoàn.** Verify with captured samples in `src/samples/`, `pnpm test` and `ui-verify`.
 2. Add its name to `Command` in `src/api.ts`.
 3. Parse: write a pure parser with `parseTable()` (`src/table.ts`, which looks columns up by name, turns `""` into null for nullable columns, and checks numbers) plus a `*.test.ts` against captured output in `src/samples/`. Store the result in `storeResult()` in `src/host.ts`, under its own `storage.local` key, and add that key to `KEYS` in `shared/store.ts`.
-4. UI: add a view in `content/views.tsx` and a row on `Home`, add the view to `View` and `REFRESH` in `content/App.tsx`, then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
+4. UI: add a view in `content/views.tsx` and a row on `Home`, add the view to `View` and `TITLES` in `content/App.tsx` (a browse view: `useBrowse` + `Browse` from `content/browse.tsx`), then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
 
 ## Codebase structure
 
@@ -91,7 +101,7 @@ host/
   protocol.mjs          pure: socket path, framing, chunking, argv building (tested in host.test.mjs)
   tabularis-query.mjs   one SELECT through `tabularis --mcp` (JSON-RPC over stdio); prints result JSON to stdout, progress to stderr
   commands.json         the allowlist
-  sql/                  failed-syncs.sql, projects.sql, project-connections.sql (':project_id' placeholder)
+  sql/                  failed-syncs.sql, projects.sql, project-connections.sql, connections.sql, fitting-rooms.sql
   install.mjs           install-host / uninstall-host
 public/manifest.json    MV3 manifest (nativeMessaging, content script on https://app.refit.ai/*)
 src/
@@ -100,12 +110,14 @@ src/
   host.ts               worker: connectNative port, run lifecycle, output buffer, failedSyncs parse/store
   term.ts               pure: ANSI strip, line splitting, line cap, durations, run status
   table.ts              pure: Tabularis {columns, rows} reader shared by all parsers
-  failed-syncs.ts       pure: failed-syncs parser, connection/project URLs, labels
-  projects.ts           pure: projects + project-connections parsers, project search, per-project cache cap
+  failed-syncs.ts       pure: failed-syncs parser, connection/project/fitting-room URLs, labels
+  projects.ts           pure: browse parsers, BATCH, query <-> args (hex q), mergePage, per-project cache cap, pins
   samples/              captured command output for parser tests
   themes.ts ui.css      design system (copied from claude-sidecar; Settings = theme, mode, badge)
   shared/               controls, icons, store (useStore/useDark/useNow), Terminal, SyncList, HostSetup
-  content/              drawer: main.tsx (shadow root), App.tsx (view stack, header), views.tsx (Home, Projects, Project, Failed), Settings.tsx, styles.css
+  content/              drawer: main.tsx (shadow root), App.tsx (view stack, header, per-view query state), views.tsx (Home, Failed,
+                        Projects, Project, Connections, FittingRooms), browse.tsx (useBrowse, status line, load more, empty/skeleton),
+                        resize.ts (left-edge drag), Settings.tsx, styles.css
   popup/                main.tsx, PopupSettings.tsx, popup.css
   options.tsx           settings page (host setup)
 .claude/skills/         ui-system, ui-verify

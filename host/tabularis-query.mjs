@@ -1,22 +1,30 @@
 // Runs one fixed, read-only SQL file through Tabularis's MCP server (stdio JSON-RPC) and prints the result JSON
 // ({columns, rows, truncated, pagination}) to stdout. Progress goes to stderr so the drawer's terminal shows it.
 // Tabularis holds the DB credentials, so this repo never sees them.
-// Usage: node tabularis-query.mjs <tabularis binary> <connection id> <sql file> <row limit> [project id]
+// Usage: node tabularis-query.mjs <tabularis binary> <connection id> <sql file> <row limit> [--param value ...]
+// Params fill the SQL's typed placeholders through bindParams() (protocol.mjs); see PARAMS there for the types.
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { bindUuid } from './protocol.mjs'
+import { bindParams, stripLeadingComments } from './protocol.mjs'
 
-const [bin, connectionId, sqlFile, limit, projectId] = process.argv.slice(2)
+const [bin, connectionId, sqlFile, limit, ...rest] = process.argv.slice(2)
 const TIMEOUT_MS = 60_000
 const say = s => process.stderr.write(s + '\n')
+const refuse = msg => { say(`Refusing ${sqlFile}: ${msg}`); process.exit(2) }
 
+const params = {}
+for (let i = 0; i < rest.length; i += 2) {
+  if (!rest[i].startsWith('--') || rest[i + 1] === undefined) refuse(`bad param list near ${JSON.stringify(rest[i])}`)
+  params[rest[i].slice(2)] = rest[i + 1]
+}
 let query
-try { query = bindUuid(readFileSync(sqlFile, 'utf8').trim(), projectId) } catch (e) { say(`Refusing ${sqlFile}: ${e.message}`); process.exit(2) }
+try { query = bindParams(stripLeadingComments(readFileSync(sqlFile, 'utf8')), params) } catch (e) { refuse(e.message) }
 // ponytail: belt-and-braces read-only check on a SQL file we wrote; a read-only DB role would be the real guard
-if (!/^(select|with)\b/i.test(query) || /;\s*\S/.test(query)) { say(`Refusing ${sqlFile}: only a single SELECT is allowed`); process.exit(2) }
+if (!/^(select|with)\b/i.test(query) || /;\s*\S/.test(query)) refuse('only a single SELECT is allowed')
 
 const started = Date.now()
-say(`$ tabularis --mcp  ·  run_query on ${connectionId}  ·  ${sqlFile}${projectId ? `  ·  project ${projectId}` : ''}`)
+const shown = Object.entries(params).map(([k, v]) => `${k}=${k === 'q' ? JSON.stringify(Buffer.from(v, 'hex').toString('utf8')) : v}`).join(' ')
+say(`$ tabularis --mcp  ·  run_query on ${connectionId}  ·  ${sqlFile}${shown ? `  ·  ${shown}` : ''}`)
 const tab = spawn(bin, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'] })
 const tail = [] // last lines of Tabularis's own log, shown only if something goes wrong
 tab.stderr.setEncoding('utf8').on('data', d => { tail.push(...d.split('\n').filter(Boolean)); tail.splice(0, Math.max(0, tail.length - 20)) })

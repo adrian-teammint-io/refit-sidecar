@@ -2,32 +2,49 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { runStatus } from '../term'
-import type { Project } from '../projects'
+import { togglePin, type Project, type ProjectsQuery } from '../projects'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
 import { Terminal } from '../shared/Terminal'
 import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
 import { SettingsView } from './Settings'
-import { Home, FailedView, ProjectsView, ProjectView, type ProjectFilter } from './views'
+import { Home, FailedView, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type HomeTarget } from './views'
+import { useResize } from './resize'
 
 // A stack of views: Home lists the commands, each command opens its own view, Back pops.
+type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 type View =
   | { kind: 'home' }
   | { kind: 'failed' }
   | { kind: 'projects' }
-  | { kind: 'project'; project: Pick<Project, 'id' | 'name'> & Partial<Project> }
+  | { kind: 'connections' }
+  | { kind: 'fitting' }
+  | { kind: 'project'; project: ProjectRef }
   | { kind: 'output' }
   | { kind: 'settings' }
 
-// Which command the header's refresh button re-runs in each view.
-const REFRESH: Partial<Record<View['kind'], Command>> = { failed: 'failed-syncs', projects: 'projects', project: 'project-connections' }
+const TITLES: Record<View['kind'], string> = {
+  home: 'Refit Sidecar', failed: 'Failed syncs', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
+  project: '', output: 'Output', settings: 'Settings',
+}
 
 export function App() {
   const store = useStore()
-  const { settings, host, run, output, failedSyncs: fs, projects, projectConnections, loaded } = store
+  const { settings, host, run, output, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, loaded } = store
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
-  const [filter, setFilter] = useState<ProjectFilter>({ q: '', status: 'all' }) // kept here so Back to Projects keeps the search
+  // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
+  const [projectsQuery, setProjectsQuery] = useState<ProjectsQuery>({ q: '', status: 'all', sort: 'active' })
+  const [connQuery, setConnQuery] = useState({ q: '' })
+  const [fitQuery, setFitQuery] = useState({ q: '' })
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (!loaded || seeded.current) return
+    seeded.current = true
+    if (projects?.query) setProjectsQuery(projects.query)
+    if (connections?.query) setConnQuery(connections.query)
+    if (fittingRooms?.query) setFitQuery(fittingRooms.query)
+  }, [loaded])
   const [toast, setToast] = useState('')
   const startedHere = useRef<string>(undefined) // run id started from this tab, for the "done" toast
   const running = isRunning(run)
@@ -37,19 +54,23 @@ export function App() {
   const view = stack.at(-1)!
   const n = fs?.rows.length ?? 0
   const ready = host?.state === 'ready'
+  const resize = useResize(settings.drawerWidth, w => saveSettings(settings, { drawerWidth: w }))
 
   const push = (v: View) => setStack(s => [...s, v])
   const back = () => setStack(s => (s.length > 1 ? s.slice(0, -1) : s))
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(t => (t === msg ? '' : t)), 2400) }
+  const openProject = (p: ProjectRef) => {
+    // A ref from a search hit only has id + name; the pinned snapshot (if any) fills in the rest.
+    const full = pins?.[p.id] ?? projects?.rows.find(r => r.id === p.id) ?? p
+    push({ kind: 'project', project: full })
+  }
+  const pin = (p: Project) => chrome.storage.local.set({ pins: togglePin(pins ?? {}, p, Date.now()) })
 
   useEffect(() => {
     if (!run?.endedAt || run.id !== startedHere.current) return
     startedHere.current = undefined
     if (run.exit !== 0 || run.error) return flash(runStatus(run, Date.now()).label)
-    const count = run.command === 'failed-syncs' ? `${n} failed sync${n === 1 ? '' : 's'}`
-      : run.command === 'projects' ? `${projects?.rows.length ?? 0} projects`
-      : `${projectConnections?.[run.args?.project ?? '']?.rows.length ?? 0} connections`
-    flash(count)
+    if (run.command === 'failed-syncs') flash(`${n} failed sync${n === 1 ? '' : 's'}`)
   }, [run?.endedAt])
 
   useEffect(() => {
@@ -64,13 +85,13 @@ export function App() {
   }, [open])
 
   async function exec(command: Command, args?: Args) {
-    try { startedHere.current = await call<string>({ type: 'run', command, args }) }
-    catch (e) { flash((e as Error).message) }
+    try {
+      const id = await call<string>({ type: 'run', command, args })
+      if (id !== 'queued') startedHere.current = id
+    } catch (e) { flash((e as Error).message) }
   }
   const cancel = () => call({ type: 'cancel' }).catch(e => flash((e as Error).message))
   const showOutput = () => push({ kind: 'output' })
-  const refresh = REFRESH[view.kind]
-  const refreshArgs = view.kind === 'project' ? { project: view.project.id } : undefined
 
   const common = { run, now, ready, exec, cancel, showOutput }
   let body: ReactNode = null
@@ -78,12 +99,15 @@ export function App() {
   else if (view.kind === 'settings') body = <SettingsView settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} />
   else if (view.kind === 'output') body = <div className="pane"><Terminal output={output} run={run} now={now} onCancel={cancel} /></div>
   else if (hostProblem(host)) body = <HostSetup host={host} />
-  else if (view.kind === 'home') body = <Home projects={projects} failedSyncs={fs} now={now} open={k => push({ kind: k })} />
+  else if (view.kind === 'home') body = <Home pins={pins} failedSyncs={fs} now={now} open={(k: HomeTarget) => push({ kind: k })} openProject={openProject} />
   else if (view.kind === 'failed') body = <FailedView fs={fs} {...common} />
-  else if (view.kind === 'projects') body = <ProjectsView projects={projects} filter={filter} setFilter={setFilter} openProject={p => push({ kind: 'project', project: p })} {...common} />
-  else body = <ProjectView key={view.project.id} project={view.project} cache={projectConnections} {...common} />
+  else if (view.kind === 'projects') body = <ProjectsView projects={projects} pins={pins} query={projectsQuery} setQuery={setProjectsQuery} openProject={openProject} pin={pin} {...common} />
+  else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} {...common} />
+  else if (view.kind === 'fitting') body = <FittingRoomsView page={fittingRooms} query={fitQuery} setQuery={setFitQuery} openProject={openProject} {...common} />
+  else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections}
+    pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} {...common} />
 
-  const title = { home: 'Refit Sidecar', failed: 'Failed syncs', projects: 'Projects', project: view.kind === 'project' ? view.project.name : '', output: 'Output', settings: 'Settings' }[view.kind]
+  const title = view.kind === 'project' ? view.project.name : TITLES[view.kind]
 
   return (
     <div className={`root ${dark ? 'dark' : 'light'}`} style={vars(settings.theme, dark) as React.CSSProperties}>
@@ -91,12 +115,13 @@ export function App() {
         <Icon d="terminal" size={18} />
         {n > 0 && <span className="launcher-count">{n > 99 ? '99+' : n}</span>}
       </button>
-      <aside ref={drawer} className="drawer" data-open={open} inert={!open} aria-label="Refit Sidecar"
+      <aside ref={drawer} className="drawer" data-open={open} data-resizing={resize.active} inert={!open} aria-label="Refit Sidecar"
+        style={{ width: `min(${resize.width}px, calc(100vw - 24px))` }}
         onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); stack.length > 1 ? back() : setOpen(false) } }}>
+        <div className="resize" {...resize.handle} />
         <header className="head">
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
           <h1 title={title}>{title}</h1>
-          {refresh && ready && <IconBtn icon="refresh" label={running ? 'Running…' : `Re-run ${refresh}`} onClick={() => exec(refresh, refreshArgs)} disabled={running} spin={running && run?.command === refresh} />}
           {view.kind !== 'output' && view.kind !== 'settings' && (
             <button className="icon-btn" aria-label="Output" title="Raw output of the last run" data-live={running} onClick={showOutput}><Icon d="terminal" /></button>
           )}

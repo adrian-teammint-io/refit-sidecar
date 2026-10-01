@@ -1,7 +1,7 @@
 import type { Line, RunInfo } from './term'
 
 // Commands the UI can ask for. The host's commands.json is the real allowlist; this union just types the UI side.
-export type Command = 'failed-syncs' | 'projects' | 'project-connections'
+export type Command = 'failed-syncs' | 'projects' | 'project-connections' | 'connections' | 'fitting-rooms'
 export type Args = Record<string, string> // validated again by the server against commands.json params
 
 export type Req =

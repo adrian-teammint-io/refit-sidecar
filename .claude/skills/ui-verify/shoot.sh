@@ -5,7 +5,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
 WHAT=${1:-all}; shift
-MODES=${*:-results results-nav=failed results-nav=projects results-nav=projects-q=skin results-nav=project loading-nav=projects output never zero-nav=failed error-nav=failed offline missing settings many-nav=failed results-light results-nav=project-light}
+MODES=${*:-results results-nav=failed results-nav=projects results-nav=projects-q=skin results-nav=project results-nav=project-sort=service results-nav=connections results-nav=fitting loading-nav=projects many-nav=projects many-nav=connections output never zero-nav=failed error-nav=failed offline missing settings many-nav=failed results-light results-nav=projects-light results-nav=project-light results-nav=fitting-light}
 S=$(mktemp -d)
 cp -R "$REPO/dist" "$S/x" && cp "$HERE/stub.js" "$HERE/mock.html" "$S/x/"
 sed -i '' 's|<head>|<head><script src="/stub.js"></script>|' "$S/x/popup.html"
@@ -13,9 +13,9 @@ PORT=8766
 (cd "$S/x" && python3 -m http.server $PORT >/dev/null 2>&1 &)
 sleep 1
 C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-shoot() { "$C" --headless=new --disable-gpu --hide-scrollbars --window-size=$1 --virtual-time-budget=8000 --screenshot="$2" "$3" >/dev/null 2>&1; }
+shoot() { "$C" --headless=new --disable-gpu --hide-scrollbars --window-size=$1 --virtual-time-budget=${B:-8000} --screenshot="$2" "$3" >/dev/null 2>&1; }
 for m in $MODES; do
-  q=${m/-light/&light}; q=${q//-nav=/&nav=}; q=${q//-q=/&q=}
+  q=${m/-light/&light}; q=${q//-nav=/&nav=}; q=${q//-q=/&q=}; q=${q//-sort=/&sort=}
   [[ $WHAT != popup ]] && shoot 1280,860 "$S/drawer-$m.png" "http://localhost:$PORT/mock.html#$q"
   [[ $WHAT != drawer ]] && shoot 420,${H:-600} "$S/popup-$m.png" "http://localhost:$PORT/popup.html?m=$q"
 done

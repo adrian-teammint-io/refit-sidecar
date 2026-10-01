@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bindUuid, buildArgv, decoder, encode, takeChunks } from './protocol.mjs'
+import { bindParams, buildArgv, decoder, encode, stripLeadingComments, takeChunks, toHex } from './protocol.mjs'
 
 // framing round trip, including a frame split across reads and two frames in one read
 const got = []
@@ -34,14 +34,26 @@ assert.throws(() => buildArgv(spec, { other: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, { __proto__: { a: 1 }, b: '1' }), /Unknown param/)
 assert.throws(() => buildArgv({ args: [] }, 'x'), /object/)
 
-// SQL placeholder: only a real UUID gets in, and only into a query that asks for one
-const q = "SELECT 1 FROM c WHERE c.project_id = ':project_id'"
-assert.equal(bindUuid(q, '799A63F3-235C-46CE-9141-12E28915539F'), "SELECT 1 FROM c WHERE c.project_id = '799a63f3-235c-46ce-9141-12e28915539f'")
-assert.throws(() => bindUuid(q, "x' OR '1'='1"), /UUID/)
-assert.throws(() => bindUuid(q, '799a63f3-235c-46ce-9141-12e28915539f; DROP TABLE x'), /UUID/)
-assert.throws(() => bindUuid(q, undefined), /UUID/)
-assert.throws(() => bindUuid('SELECT 1', '799a63f3-235c-46ce-9141-12e28915539f'), /no project id/)
-assert.equal(bindUuid('SELECT 1', undefined), 'SELECT 1')
+// SQL placeholders: typed, all required, none extra; free text only ever arrives as hex
+const P = '799a63f3-235c-46ce-9141-12e28915539f'
+const q = "SELECT to_char(x, 'HH24:MI:SS'), c.id::text FROM c WHERE c.project_id = :project_id AND strpos(lower(c.name), lower(:q)) > 0 AND (:status = 'all') ORDER BY :sort LIMIT 31 OFFSET :offset"
+const bound = bindParams(q, { project_id: P.toUpperCase(), q: toHex("it's 50%"), status: 'ACTIVE', sort: 'service', offset: '030' })
+assert.equal(bound, `SELECT to_char(x, 'HH24:MI:SS'), c.id::text FROM c WHERE c.project_id = '${P}' AND strpos(lower(c.name), lower(convert_from(decode('${toHex("it's 50%")}', 'hex'), 'UTF8'))) > 0 AND ('ACTIVE' = 'all') ORDER BY 'service' LIMIT 31 OFFSET 30`)
+assert.ok(!bound.includes("it's")) // the quote never reaches SQL as text
+const ok = { project_id: P, q: '', status: 'all', sort: 'name', offset: '0' }
+assert.throws(() => bindParams(q, { ...ok, project_id: "x' OR '1'='1" }), /project_id must be a UUID/)
+assert.throws(() => bindParams(q, { ...ok, project_id: `${P}; DROP TABLE x` }), /UUID/)
+assert.throws(() => bindParams(q, { ...ok, q: "61'" }), /q must be hex/)
+assert.throws(() => bindParams(q, { ...ok, q: '6' }), /q must be hex/) // odd length
+assert.throws(() => bindParams(q, { ...ok, q: '61'.repeat(201) }), /max 200/)
+assert.throws(() => bindParams(q, { ...ok, offset: '1 OR 1=1' }), /offset must be a whole number/)
+assert.throws(() => bindParams(q, { ...ok, offset: '123456' }), /offset/)
+assert.throws(() => bindParams(q, { ...ok, status: "all' OR 'x" }), /status must be one of/)
+assert.throws(() => bindParams(q, { ...ok, sort: 'name; DROP' }), /sort must be one of/)
+assert.throws(() => bindParams(q, { ...ok, offset: undefined }), /Missing offset/)
+assert.throws(() => bindParams('SELECT 1', { project_id: P }), /takes no project_id/)
+assert.equal(bindParams('SELECT 1'), 'SELECT 1')
+assert.equal(stripLeadingComments('-- a\n  -- b\nSELECT 1 -- c\n'), 'SELECT 1 -- c')
 
 // end to end: Chrome's side of host.mjs (the relay) -> unix socket -> server.mjs
 const dir = mkdtempSync(join(tmpdir(), 'refit-host-'))

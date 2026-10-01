@@ -1,0 +1,42 @@
+{
+  "columns": [
+    "id",
+    "connection_id",
+    "project_id",
+    "project",
+    "name",
+    "kind",
+    "service",
+    "type",
+    "start_date",
+    "end_date",
+    "reason",
+    "display_reason",
+    "update_at"
+  ],
+  "rows": [
+    [
+      "025c7f0d-c507-4deb-b7dc-52598a35d0d1",
+      "beae0810-e8a6-45ce-8790-cfa8974be78e",
+      "799a63f3-235c-46ce-9141-12e28915539f",
+      "팀민트_크레이버",
+      "TEST",
+      "SERVICE",
+      "META",
+      "FIRST",
+      "2026-08-31",
+      "2026-09-30",
+      "JSONDecodeError('Extra data: line 1 column 68008 (char 68007)')",
+      null,
+      "2026-10-01T06:36:26Z"
+    ]
+  ],
+  "affected_rows": 0,
+  "truncated": false,
+  "pagination": {
+    "page": 1,
+    "page_size": 500,
+    "total_rows": null,
+    "has_more": false
+  }
+}

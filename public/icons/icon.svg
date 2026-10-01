@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Source for icon-{16,32,48,128}.png: for n in 16 32 48 128; do rsvg-convert -w $n -h $n icon.svg -o icon-$n.png; done -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d1f24"/><stop offset="1" stop-color="#0b0b0d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".3" cy=".3" r=".7">
+      <stop offset="0" stop-color="#d4ff3a" stop-opacity=".18"/><stop offset="1" stop-color="#d4ff3a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#glow)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="27.25" fill="none" stroke="#ffffff" stroke-opacity=".1" stroke-width="1.5"/>
+  <!-- prompt chevron + cursor -->
+  <path d="M34 42 56 64 34 86" fill="none" stroke="#d4ff3a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M66 88h28" stroke="#ededf0" stroke-width="12" stroke-linecap="round"/>
+</svg>

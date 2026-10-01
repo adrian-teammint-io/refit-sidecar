@@ -1,0 +1,16 @@
+{
+  "commands": {
+    "failed-syncs": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "ea7632d2-f563-4d45-80ba-22728c416a40",
+        "sql/failed-syncs.sql",
+        "500"
+      ],
+      "params": {},
+      "timeoutMs": 90000
+    }
+  }
+}

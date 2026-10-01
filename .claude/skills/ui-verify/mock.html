@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Refit (mock)</title><style>
+body{margin:0;background:#f6f7f9;color:#1d2433;font:14px system-ui;height:100vh;display:flex}
+nav{width:220px;background:#fff;border-right:1px solid #e3e6ec;padding:20px 14px;display:flex;flex-direction:column;gap:6px}
+nav b{font-size:18px;margin-bottom:16px;color:#3451ff}nav span{padding:8px 10px;border-radius:8px}nav span.on{background:#eef1ff;color:#3451ff}
+main{flex:1;padding:28px 36px}h1{font-size:22px;margin:0 0 18px}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e6ec;border-radius:12px;overflow:hidden}
+td,th{padding:12px 14px;border-bottom:1px solid #eef0f4;text-align:left;font-size:13px}th{color:#6b7385;font-weight:500}
+</style></head><body>
+<nav><b>REFIT</b><span>Dashboard</span><span class="on">Data sources</span><span>Fitting room</span><span>Settings</span></nav>
+<main><h1>Data sources</h1><table><tr><th>Name</th><th>Platform</th><th>Last sync</th></tr>
+<tr><td>KR · Meta Ads main</td><td>META</td><td>Failed</td></tr><tr><td>JP TikTok spark</td><td>TIKTOK</td><td>Success</td></tr>
+<tr><td>Naver SA brand keywords</td><td>NAVER_SA</td><td>Success</td></tr></table></main>
+<script>
+const log = m => document.body.insertAdjacentHTML('afterbegin', '<pre id="e">' + m + '</pre>')
+window.onerror = (m, f, l, c, e) => log(m + ' ' + (e && e.stack)); console.error = (...a) => log(a.map(String).join(' '))
+</script>
+<script src="stub.js"></script>
+<script>
+setTimeout(() => {
+  const s = document.querySelector('refit-sidecar').shadowRoot
+  if (/closed/.test(location.hash)) return
+  s.querySelector('.launcher').click()
+  setTimeout(() => {
+    if (__MODE === 'output') s.querySelectorAll('.tabs .segmented button')[1].click()
+    if (__MODE === 'settings') s.querySelector('[aria-label="Settings"]').click()
+    if (/expand/.test(location.hash)) s.querySelectorAll('.sync-reason')[1].click()
+  }, 300)
+}, 300)
+</script><script src="content.js"></script></body></html>

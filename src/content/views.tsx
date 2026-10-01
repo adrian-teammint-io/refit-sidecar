@@ -7,10 +7,12 @@ import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, type Fa
 import {
   pinnedFor, type Project, type ProjectConnection, type ConnectionHit, type FittingRoom, type Pins,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery,
+  type ProjectMembers, type UserSearch,
 } from '../projects'
 import { Icon, type IconName } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { ENV } from '../table'
+import { MembersPanel } from './members'
 import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
 export type { Exec } from './browse'
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void; showOutput: () => void }
@@ -117,13 +119,13 @@ export function ProjectsView({ projects, pins, query, setQuery, openProject, pin
 const TONE: Record<string, string> = { SUCCESS: 'ok', FAIL: 'fail' }
 const CONN_SORTS = [['status', 'Failing first'], ['service', 'Service'], ['name', 'Name']] as const
 
-export function ProjectView({ project, cache, pinned, pin, openProject, ...c }: {
-  project: ProjectRef; cache?: ProjectConnections; pinned: boolean; pin: (p: Project) => void; openProject: (p: ProjectRef) => void
+const PROJECT_TABS = [['connections', 'Connections'], ['members', 'Members']] as const
+
+export function ProjectView({ project, cache, members, userSearch, pinned, pin, openProject, ...c }: {
+  project: ProjectRef; cache?: ProjectConnections; members?: ProjectMembers; userSearch?: UserSearch
+  pinned: boolean; pin: (p: Project) => void; openProject: (p: ProjectRef) => void
 } & Common) {
-  const [query, setQuery] = useState<ConnectionsQuery>(() => cache?.[project.id]?.query ?? { q: '', sort: 'status' })
-  const page = cache?.[project.id]
-  const extra = { project: project.id }
-  const b = useBrowse({ page, query, command: 'project-connections', extra, ...c })
+  const [tab, setTab] = useState<'connections' | 'members'>('connections')
   const url = projectUrl(project.id)
   const full = project.status !== undefined
   return (
@@ -136,6 +138,21 @@ export function ProjectView({ project, cache, pinned, pin, openProject, ...c }: 
         {full && <button className="icon-btn pin" aria-pressed={pinned} aria-label={pinned ? 'Unpin project' : 'Pin project'} title={pinned ? 'Unpin' : 'Pin to top'} onClick={() => pin(project as Project)}><Icon d="pin" /></button>}
         {url && <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a>}
       </div>
+      <Segmented label="Project section" value={tab} options={PROJECT_TABS} onChange={setTab} />
+      {tab === 'members'
+        ? <MembersPanel projectId={project.id} projectName={project.name} members={members?.[project.id]} search={userSearch} {...c} />
+        : <ProjectConnectionsPanel project={project} cache={cache} {...c} />}
+    </div>
+  )
+}
+
+function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef; cache?: ProjectConnections } & Common) {
+  const [query, setQuery] = useState<ConnectionsQuery>(() => cache?.[project.id]?.query ?? { q: '', sort: 'status' })
+  const page = cache?.[project.id]
+  const extra = { project: project.id }
+  const b = useBrowse({ page, query, command: 'project-connections', extra, ...c })
+  return (
+    <>
       <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel} showOutput={c.showOutput}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : 'This project has no data sources yet.'} />}
@@ -145,7 +162,7 @@ export function ProjectView({ project, cache, pinned, pin, openProject, ...c }: 
           <Segmented label="Sort connections" value={query.sort} options={CONN_SORTS} onChange={sort => setQuery({ ...query, sort })} />
         </div>
       </Browse>
-    </div>
+    </>
   )
 }
 

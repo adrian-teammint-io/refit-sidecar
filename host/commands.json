@@ -177,6 +177,88 @@
         }
       },
       "timeoutMs": 330000
+    },
+    "project-members": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/project-members.sql",
+        "200",
+        "--project_id",
+        "{project}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "project": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "user-search": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/user-search.sql",
+        "200",
+        "--project_id",
+        "{project}",
+        "--q",
+        "{q}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "project": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        },
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){2,200}"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "add-project-user": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/add-project-user.sql",
+        "200",
+        "--user_id",
+        "{user}",
+        "--project_id",
+        "{project}",
+        "--role",
+        "{role}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "user": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        },
+        "project": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        },
+        "role": {
+          "pattern": "admin|editor|viewer",
+          "default": "viewer"
+        }
+      },
+      "timeoutMs": 330000
     }
   }
 }

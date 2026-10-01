@@ -93,6 +93,24 @@ export function parseFittingRooms(stdout: string): FittingRoom[] {
   }).rows as FittingRoom[]
 }
 
+// ---------- project members (refit_user_project_relation) ----------
+
+export const ROLES = ['viewer', 'editor', 'admin'] as const // refit_user_role values
+export type Role = (typeof ROLES)[number]
+export type Member = { id: string; email: string; name: string | null; role: Role; addedAt: string }
+export type UserHit = { id: string; email: string; name: string | null; memberRole: Role | null } // memberRole: already in the project
+export type Members = { at: number; runId: string; rows: Member[]; error?: string }
+export type ProjectMembers = Record<string, Members> // by project id
+export type UserSearch = { at: number; runId: string; project: string; q: string; rows: UserHit[]; error?: string }
+
+export function parseMembers(stdout: string): Member[] {
+  return parseTable(stdout, { cols: { id: 'id', email: 'email', name: 'name', role: 'role', addedAt: 'added_at' }, nullable: ['name'] }).rows as Member[]
+}
+
+export function parseUserHits(stdout: string): UserHit[] {
+  return parseTable(stdout, { cols: { id: 'id', email: 'email', name: 'name', memberRole: 'member_role' }, nullable: ['name', 'memberRole'] }).rows as UserHit[]
+}
+
 // ---------- search text <-> command args ----------
 
 // Search text travels as hex of its UTF-8 bytes; the host only accepts [0-9a-f] for it (see PARAMS in protocol.mjs).

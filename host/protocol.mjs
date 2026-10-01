@@ -67,6 +67,8 @@ export const PARAMS = {
   offset: v => { if (!/^\d{1,5}$/.test(v)) throw new Error('must be a whole number'); return String(Number(v)) },
   status: ENUM('all', 'ACTIVE', 'PAUSED'),
   sort: ENUM('active', 'name', 'recent', 'status', 'service'),
+  user_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
+  role: ENUM('admin', 'editor', 'viewer'), // refit_user_role values
   // search text: hex of the UTF-8 text, decoded by Postgres. SQL matches it with strpos(lower(col), lower(:q)) > 0,
   // a plain substring test with no LIKE wildcards to escape. (Escaping with replace() is out: Tabularis's read-only
   // mode flags "replace(" in larger queries as a write.)
@@ -87,7 +89,11 @@ export const CONNECTIONS = { prod: 'ea7632d2-f563-4d45-80ba-22728c416a40', stag:
 
 // The only writes tabularis-query.mjs will send, by SQL file, each with the exact shape its statement must have.
 // Everything else must be a single SELECT / WITH. Tabularis still asks for approval in its console before a write.
-export const WRITES = { 'sql/delete-syncs.sql': /^delete from sync_request where status = 'FAIL' and id in \('[0-9a-f-]{36}'(?:, '[0-9a-f-]{36}')*\) returning id$/i }
+const U = "'[0-9a-f-]{36}'"
+export const WRITES = {
+  'sql/delete-syncs.sql': new RegExp(`^delete from sync_request where status = 'FAIL' and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
+  'sql/add-project-user.sql': new RegExp(`^insert into refit_user_project_relation \\(user_id, project_id, role\\) values \\(${U}, ${U}, '(?:admin|editor|viewer)'\\) on conflict \\(project_id, user_id\\) do nothing returning user_id, role$`, 'i'),
+}
 
 // Throws unless `query` (already bound) is allowed for `sqlFile`. Returns true for an approved write.
 export function checkQuery(sqlFile, query) {

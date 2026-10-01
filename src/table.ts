@@ -46,4 +46,4 @@ export const ENV: Env = globalThis.location?.hostname === 'staging-app.refit.ai'
 export const APP = ENV === 'stag' ? 'https://staging-app.refit.ai' : 'https://app.refit.ai'
 // Results are kept per environment: prod keeps the plain key names (the popup and badge read those), staging prefixes them.
 export const envKey = (env: string | undefined, key: string) => (env === 'stag' ? `stag.${key}` : key)
-export const DATA_KEYS = ['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins'] as const
+export const DATA_KEYS = ['failedSyncs', 'projects', 'projectConnections', 'connections', 'fittingRooms', 'pins', 'projectMembers', 'userSearch'] as const

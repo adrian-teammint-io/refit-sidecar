@@ -6,7 +6,8 @@ import { flushCarry, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
 import { DATA_KEYS, envKey } from './table'
 import {
-  parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
+  parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, parseMembers, parseUserHits, fromHex, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
+  type Members, type ProjectMembers, type UserSearch,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
 } from './projects'
 
@@ -59,12 +60,13 @@ export function connect() {
 // One command runs at a time. While one runs, the newest request waits (replacing any older waiting one), and a
 // request for the same command supersedes the running one: it is cancelled and its result thrown away, so typing
 // in a search box never waits behind a stale query.
-// A delete never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
+// A write never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
+const WRITES: Command[] = ['delete-syncs', 'add-project-user']
 export function startRun(command: Command, args: Args = {}): string {
-  if (current && command === 'delete-syncs') throw new Error(`Busy: wait for ${current.run.command} to finish, then delete again`)
+  if (current && WRITES.includes(command)) throw new Error(`Busy: wait for ${current.run.command} to finish, then try again`)
   if (current) {
     pending = { command, args }
-    if (current.run.command === command && current.run.args?.env === args.env && command !== 'delete-syncs' && !current.superseded) {
+    if (current.run.command === command && current.run.args?.env === args.env && !WRITES.includes(command) && !WRITES.includes(current.run.command) && !current.superseded) {
       current.superseded = true
       port?.postMessage({ id: current.run.id, type: 'cancel' })
     }
@@ -164,7 +166,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
   const env = run.args?.env
   const got = await chrome.storage.local.get(DATA_KEYS.map(k => envKey(env, k)))
   const s = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]]))) as {
-    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins
+    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins; projectMembers?: ProjectMembers
   }
   const save = (o: Record<string, unknown>) => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
   if (run.command === 'delete-syncs') {
@@ -181,6 +183,26 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
     if (!gone.length) return { summary, then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } }
     if (s.failedSyncs) await save({ failedSyncs: { ...s.failedSyncs, rows: s.failedSyncs.rows.filter(r => !gone.includes(r.id.toLowerCase())) } })
     return { summary }
+  }
+  if (run.command === 'project-members' && run.args?.project) {
+    const id = run.args.project
+    const cache = s.projectMembers ?? {}
+    const next = outcome<Members>(cache[id], { at: 0, runId: run.id, rows: [] }, run, () => ({ at, runId: run.id, rows: parseMembers(stdout) }))
+    return save({ projectMembers: cacheProject(cache, id, next) })
+  }
+  if (run.command === 'user-search') {
+    const base = { at, runId: run.id, project: run.args?.project ?? '', q: fromHex(run.args?.q ?? '') }
+    const next = outcome<UserSearch>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseUserHits(stdout) }))
+    return save({ userSearch: next })
+  }
+  if (run.command === 'add-project-user') {
+    const project = run.args?.project ?? ''
+    const reload = { command: 'project-members' as Command, args: { env: env ?? 'prod', project } }
+    if (run.exit !== 0 || run.error) return
+    let added = 0
+    try { added = (JSON.parse(stdout) as { rows?: unknown[] }).rows?.length ?? 0 } catch { return { summary: 'Add finished; could not read the result', then: reload } }
+    // ON CONFLICT DO NOTHING: no row back means they were already a member and nothing changed.
+    return { summary: added ? `Added as ${run.args?.role ?? 'viewer'}` : 'Already a member; nothing changed', then: reload }
   }
   if (run.command === 'failed-syncs') {
     const next = outcome<FailedSyncs>(s.failedSyncs, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))

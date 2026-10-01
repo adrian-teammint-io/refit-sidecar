@@ -10,7 +10,7 @@ import { Icon, type IconName } from '../shared/icons'
 
 export type Exec = (command: Command, args?: Args) => void
 
-function useDebounced<T>(value: T, ms = 300): T {
+export function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value)
   useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t) }, [JSON.stringify(value)])
   return v

@@ -46,7 +46,7 @@ class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }>
 
 export function App() {
   const store = useStore()
-  const { settings, host, run, output, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, loaded } = store
+  const { settings, host, run, output, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, loaded } = store
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
   // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
@@ -121,7 +121,7 @@ export function App() {
   else if (view.kind === 'projects') body = <ProjectsView projects={projects} pins={pins} query={projectsQuery} setQuery={setProjectsQuery} openProject={openProject} pin={pin} {...common} />
   else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} {...common} />
   else if (view.kind === 'fitting') body = <FittingRoomsView page={fittingRooms} query={fitQuery} setQuery={setFitQuery} openProject={openProject} {...common} />
-  else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections}
+  else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections} members={projectMembers} userSearch={userSearch}
     pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} {...common} />
 
   const title = view.kind === 'project' ? view.project.name : TITLES[view.kind]

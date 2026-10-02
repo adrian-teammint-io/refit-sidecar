@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ago } from '../term'
 import { ENV } from '../table'
 import { ROLES, cleanQuery, toHex, type Members, type Role, type UserHit, type UserSearch } from '../projects'
-import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, runMatches, useDebounced } from './browse'
+import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, commandState, useDebounced } from './browse'
 import type { Common } from './views'
 
 const ROLE_OPTIONS = ROLES.map(r => [r, r[0].toUpperCase() + r.slice(1)] as const)
@@ -20,7 +19,7 @@ export function MembersPanel({ projectId, projectName, members, search, ...c }: 
   const load = () => c.exec('project-members', { env: ENV, project: projectId })
   const asked = useRef(false)
   useEffect(() => { if (c.ready && !members && !asked.current) { asked.current = true; load() } }, [c.ready])
-  const loading = isRunning(c.run) && runMatches(c.run, 'project-members', extra)
+  const loading = commandState(c.run, 'project-members', extra).mine
   const n = members?.rows.length ?? 0
   return (
     <div className="members" onKeyDown={e => { if (e.key === 'Escape' && adding) { e.stopPropagation(); setAdding(false) } }}>
@@ -53,13 +52,12 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
   const [role, setRole] = useState<Role>('viewer')
   const [typed, setTyped] = useState('')
   const extra = { project: projectId }
-  const saving = isRunning(run) && runMatches(run, 'add-project-user', extra)
-  const last = run && !isRunning(run) && runMatches(run, 'add-project-user', extra) ? run : undefined
+  const { mine: saving, busy, last, ok: added } = commandState(run, 'add-project-user', extra)
   // A finished add (added, or already a member): the members list reloads by itself; close the form.
-  useEffect(() => { if (last && last.exit === 0 && !last.error) onClose() }, [last?.id])
+  useEffect(() => { if (added) onClose() }, [last?.id])
   const prod = ENV === 'prod'
   const handle = picked ? picked.email.split('@')[0] : ''
-  const ok = !!picked && !picked.memberRole && !saving && !(isRunning(run) && !saving) && (!prod || typed.trim().toLowerCase() === handle.toLowerCase())
+  const ok = !!picked && !picked.memberRole && !saving && !busy && (!prod || typed.trim().toLowerCase() === handle.toLowerCase())
 
   return (
     <div className="add-panel" data-env={ENV}>
@@ -81,7 +79,7 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
           Add <b>{picked.email}</b> to <b>{projectName}</b> as <b>{role}</b>?
         </p>
         <p className="hint muted">{saving ? <>Waiting for approval in the <b>Tabularis</b> app…</> : 'Approve it in Tabularis when asked. If they are already a member, nothing changes.'}</p>
-        {isRunning(run) && !saving && <p className="hint muted">Wait for {run!.command} to finish.</p>}
+        {busy && <p className="hint muted">Wait for {busy} to finish.</p>}
         <div className="bulk-row">
           {prod && !saving && (
             <label className="bulk-type">
@@ -111,7 +109,7 @@ export function UserPicker({ projectId, search, run, ready, exec, onPick, skip, 
   const wanted = useDebounced(cleanQuery(q))
   useEffect(() => { if (ready && wanted.length >= 2) exec('user-search', { env: ENV, project: projectId, q: toHex(wanted) }) }, [wanted, ready])
   const fresh = !!search && search.project === projectId && search.q === wanted
-  const searching = isRunning(run) && runMatches(run, 'user-search', { project: projectId })
+  const searching = commandState(run, 'user-search', { project: projectId }).mine
   const hits = fresh ? search!.rows.filter(u => !skip?.has(u.id)) : []
   return <>
     <SearchBox value={q} onChange={setQ} placeholder={placeholder} autoFocus />

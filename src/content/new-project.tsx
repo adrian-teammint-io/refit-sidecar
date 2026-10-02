@@ -4,10 +4,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ENV } from '../table'
 import { NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Role, type UserHit, type UserSearch } from '../projects'
-import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { runMatches } from './browse'
+import { commandState } from './browse'
 import { UserPicker } from './members'
 import type { Common } from './views'
 
@@ -54,9 +53,8 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
     if (me) setMembers(m => (m.some(x => x.user.id === me.id) ? m : [{ user: me, role: 'admin' }, ...m]))
   }, [search?.runId])
 
-  const creating = isRunning(run) && runMatches(run, 'create-project')
-  const last = run && !isRunning(run) && runMatches(run, 'create-project') ? run : undefined
-  useEffect(() => { if (last?.exit === 0 && last.result?.projectId) onCreated({ id: last.result.projectId, name: last.result.name }) }, [last?.id])
+  const { mine: creating, busy, last, ok: created } = commandState(run, 'create-project')
+  useEffect(() => { if (created && last!.result?.projectId) onCreated({ id: last!.result.projectId, name: last!.result.name }) }, [last?.id])
 
   const trimmed = name.trim()
   const extras = members.filter(m => m.user.id !== owner?.id) // the owner is always admin
@@ -69,7 +67,6 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
     extras.length > MAX_MEMBERS && `At most ${MAX_MEMBERS} members.`,
   ].filter(Boolean) as string[]
   const prod = ENV === 'prod'
-  const busy = isRunning(run) && !creating ? run!.command : undefined
   const ok = !problems.length && !busy && !creating && (!prod || typed === trimmed)
   const create = () => owner && exec('create-project', {
     env: ENV, name: toHex(trimmed), user: owner.id, status, plan, end, members: extras.map(m => `${m.user.id}:${m.role}`).join(','),

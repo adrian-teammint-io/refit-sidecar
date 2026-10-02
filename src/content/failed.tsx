@@ -9,7 +9,7 @@ import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
-import { Empty, ErrorBanner, Skeleton, runMatches } from './browse'
+import { Empty, ErrorBanner, Skeleton, commandState } from './browse'
 import type { Common } from './views'
 
 const MAX_DELETE = 100 // the delete-syncs ids param takes at most 100
@@ -34,14 +34,15 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [confirming, setConfirming] = useState(false)
   const selected = rows.filter(r => picked.has(r.id)) // only rows still listed
-  const mine = isRunning(run) && runMatches(run, 'failed-syncs') && ofTab(run)
-  const deleting = isRunning(run) && runMatches(run, 'delete-syncs')
-  const last = run && !isRunning(run) && ((runMatches(run, 'failed-syncs') && ofTab(run)) || (status === 'FAIL' && runMatches(run, 'delete-syncs'))) ? run : undefined
+  const fetching = commandState(run, 'failed-syncs'), del = commandState(run, 'delete-syncs')
+  const mine = fetching.mine && ofTab(run)
+  const deleting = del.mine
+  const last = (ofTab(run) ? fetching.last : undefined) ?? (status === 'FAIL' ? del.last : undefined)
   // A clean fetch is already said by "updated 2m ago"; the pill only shows a failed run or a delete's result.
   const st = last && (last.command === 'delete-syncs' || last.exit !== 0 || last.error) ? runStatus(last, now) : undefined
   const exit = () => { setSelecting(false); setPicked(new Set()); setConfirming(false) }
   // A finished delete: its rows are gone, so leave select mode.
-  useEffect(() => { if (last?.command === 'delete-syncs' && last.exit === 0 && !last.error) exit() }, [last?.id])
+  useEffect(() => { if (last?.command === 'delete-syncs' && del.ok) exit() }, [last?.id])
   const toggle = (id: string) => setPicked(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s })
   const allOn = !!n && selected.length === Math.min(n, MAX_DELETE)
   // Opened from a connection's FAIL count with nothing fetched yet: fetch once instead of showing an empty list.
@@ -87,7 +88,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
         <div className="bulk" data-open={confirming} data-env={ENV} role={confirming ? 'alertdialog' : 'toolbar'} aria-label={confirming ? 'Confirm delete' : 'Selection'}
           onKeyDown={e => { if (e.key === 'Escape' && confirming) { e.stopPropagation(); setConfirming(false) } }}>
           {confirming && !!selected.length
-            ? <Confirm rows={selected} busy={isRunning(run) && !deleting ? run!.command : undefined} deleting={deleting}
+            ? <Confirm rows={selected} busy={del.busy} deleting={deleting}
                 onCancel={() => setConfirming(false)} onDelete={() => exec('delete-syncs', { env: ENV, ids: selected.map(r => r.id).join(',') })} />
             : <div className="bulk-row">
                 <span className="bulk-count"><b>{selected.length}</b> selected</span>

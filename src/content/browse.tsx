@@ -18,8 +18,17 @@ export function useDebounced<T>(value: T, ms = 300): T {
 }
 
 // A run belongs to a view when it's the same command, for this tab's environment, with the view's extra args.
-export const runMatches = (run: Run | undefined, command: Command, extra: Args = {}) =>
+const runMatches = (run: Run | undefined, command: Command, extra: Args = {}) =>
   !!run && run.command === command && (run.args?.env ?? 'prod') === ENV && Object.entries(extra).every(([k, v]) => run.args?.[k] === v)
+
+// The one run slot as one view's command sees it: `mine` while it runs, `busy` = the other command running (the
+// worker runs one at a time), `last` = its finished run, `ok` when that run exited clean.
+export function commandState(run: Run | undefined, command: Command, extra: Args = {}) {
+  const matches = runMatches(run, command, extra)
+  const running = isRunning(run)
+  const last = !running && matches ? run : undefined
+  return { mine: running && matches, busy: running && !matches ? run!.command : undefined, last, ok: !!last && last.exit === 0 && !last.error }
+}
 
 // Fetches the first batch whenever the (debounced) query differs from the stored page's, and exposes "load more".
 export function useBrowse<Q extends { q: string } & Record<string, string>, T>({ page, query, command, extra = {}, run, ready, exec }: {
@@ -38,7 +47,7 @@ export function useBrowse<Q extends { q: string } & Record<string, string>, T>({
     asked.current = key
     exec(command, toArgs(wanted, 0, extra))
   }, [ready, key, fresh])
-  const mine = isRunning(run) && runMatches(run, command, extra)
+  const { mine } = commandState(run, command, extra)
   return {
     fresh,
     loading: mine && run!.args?.offset === '0',
@@ -53,12 +62,11 @@ export function useBrowse<Q extends { q: string } & Record<string, string>, T>({
 export function StatusLine({ run, now, command, extra, loading, meta, tools, onRefresh, onCancel }: {
   run?: Run; now: number; command: Command; extra?: Args; loading: boolean; meta: string; tools?: ReactNode; onRefresh: () => void; onCancel: () => void
 }) {
-  const mine = isRunning(run) && runMatches(run, command, extra)
-  const other = isRunning(run) && !mine
-  const st = run && !isRunning(run) && runMatches(run, command, extra) && (run.exit !== 0 || run.error) ? runStatus(run, now) : undefined
+  const { mine, busy, last, ok } = commandState(run, command, extra)
+  const st = last && !ok ? runStatus(last, now) : undefined
   return (
     <div className="runbar">
-      <span className="muted">{mine ? (loading ? 'Searching…' : 'Loading more…') : other ? `Queued after ${run!.command}` : meta}</span>
+      <span className="muted">{mine ? (loading ? 'Searching…' : 'Loading more…') : busy ? `Queued after ${busy}` : meta}</span>
       <span className="spacer" />
       {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
       {tools}

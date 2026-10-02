@@ -22,8 +22,19 @@ body { margin: 0; width: 420px; }
 }
 @keyframes card-in { from { opacity: 0; transform: translateY(4px); } }
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
-.p-count { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+/* flex-shrink 0: the popup column is height-capped; the list scrolls, not this card */
+.p-count { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-shrink: 0; }
 .p-num { display: block; font-size: 38px; font-weight: 650; letter-spacing: -0.04em; line-height: 1; margin-top: 8px; }
+.p-num svg { margin-left: 8px; vertical-align: 4px; color: #22c55e; }
+.light .p-num svg { color: #16a34a; }
+.p-where { font-size: 11.5px; margin-top: 8px; }
+/* Tone: a faint red wash + red number when something failed, so the count reads before the words do */
+.p-count[data-tone='fail'] {
+  border-color: color-mix(in oklab, #f87171 30%, var(--line));
+  background: radial-gradient(80% 120% at 0% 100%, color-mix(in oklab, #f87171 12%, transparent), transparent 70%), var(--surface);
+}
+.p-count[data-tone='fail'] .p-num { color: #f87171; }
+.light .p-count[data-tone='fail'] .p-num { color: #b91c1c; }
 .p-count-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
 .p-count-side .pill { max-width: 200px; }
 

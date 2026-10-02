@@ -130,6 +130,7 @@ code { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background:
 .syncs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .sync {
   display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--text) 4%, transparent);
   animation: rise 220ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms);
 }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
@@ -147,6 +148,16 @@ code { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background:
 @media (hover: hover) and (pointer: fine) { .sync-reason:hover { border-color: color-mix(in oklab, #f87171 40%, transparent); } }
 .sync-raw { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
 .sync-foot { display: flex; justify-content: space-between; font-size: 10.5px; }
+
+/* "Succeeded after": a later SUCCESS already covers this failure's end date (failed-syncs.sql recovered_*) */
+.ok-chip {
+  --tone: #22c55e;
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; height: 20px; padding: 0 7px; border-radius: 999px;
+  font: 500 10.5px/1 var(--sans); color: var(--text); white-space: nowrap;
+  background: color-mix(in oklab, var(--tone) 14%, transparent); border: 1px solid color-mix(in oklab, var(--tone) 35%, transparent);
+}
+.ok-chip svg { color: var(--tone); }
+.light .ok-chip { --tone: #16a34a; }
 
 /* Host card + setting rows (drawer settings, popup settings, options page) */
 .host-card, .setting-row {

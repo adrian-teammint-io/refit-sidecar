@@ -31,7 +31,22 @@ chrome.runtime.onMessage.addListener((req: Req, _s, reply) => {
   return true
 })
 
-// Badge: failed count in red, "!" in amber when the host can't be reached, nothing when all is well.
+// The count drawn as the icon itself (a badge's text is unreadably small at 16px): a red tile with the number,
+// an amber tile with "!" when the host can't be reached, the normal icon when all is well.
+function countIcon(text: string, color: string): Record<string, ImageData> {
+  return Object.fromEntries([16, 32].map(s => {
+    const ctx = new OffscreenCanvas(s, s).getContext('2d')!
+    ctx.fillStyle = color
+    ctx.beginPath(); ctx.roundRect(0, 0, s, s, s * 0.22); ctx.fill()
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    // Shrink until it fits: "8" fills the tile, "99+" still reads.
+    let size = s * 0.86
+    do ctx.font = `700 ${size--}px -apple-system, system-ui, sans-serif`; while (ctx.measureText(text).width > s * 0.9 && size > 6)
+    ctx.fillText(text, s / 2, s / 2 + s * 0.05)
+    return [s, ctx.getImageData(0, 0, s, s)]
+  }))
+}
+
 async function paint() {
   const [{ failedSyncs, settings }, { host }] = await Promise.all([
     chrome.storage.local.get(['failedSyncs', 'settings']) as Promise<{ failedSyncs?: FailedSyncs; settings?: Settings }>,
@@ -40,9 +55,9 @@ async function paint() {
   const n = failedSyncs?.rows.length ?? 0
   const hostBad = host && (host.state === 'missing' || host.state === 'forbidden')
   const on = { ...DEFAULTS, ...settings }.badge
-  await chrome.action.setBadgeText({ text: !on ? '' : hostBad ? '!' : n ? String(n > 999 ? '999+' : n) : '' })
-  await chrome.action.setBadgeBackgroundColor({ color: hostBad ? '#f59e0b' : '#dc2626' })
-  await chrome.action.setBadgeTextColor({ color: '#ffffff' })
+  await chrome.action.setBadgeText({ text: '' }) // older versions painted a badge; the icon carries the count now
+  await chrome.action.setIcon(!on || (!hostBad && !n) ? { path: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' } }
+    : { imageData: countIcon(hostBad ? '!' : n > 99 ? '99+' : String(n), hostBad ? '#d97706' : '#dc2626') })
   await chrome.action.setTitle({ title: hostBad ? 'Refit Sidecar: host not installed' : host?.state === 'offline' ? 'Refit Sidecar: run pnpm server in a terminal' : `Refit Sidecar: ${n} failed sync${n === 1 ? '' : 's'}` })
 }
 

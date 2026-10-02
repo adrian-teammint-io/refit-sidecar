@@ -66,6 +66,7 @@ export const PARAMS = {
   project_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   offset: v => { if (!/^\d{1,5}$/.test(v)) throw new Error('must be a whole number'); return String(Number(v)) },
   status: ENUM('all', 'ACTIVE', 'PAUSED'),
+  sync_status: ENUM('FAIL', 'IN_PROGRESS', 'FRAGMENTED'), // the drawer's Sync requests tabs (failed-syncs.sql)
   sort: ENUM('active', 'name', 'recent', 'status', 'service'),
   user_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   role: ENUM('admin', 'editor', 'viewer'), // refit_user_role values

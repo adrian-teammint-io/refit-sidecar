@@ -18,7 +18,7 @@ export type Mode = 'system' | 'light' | 'dark'
 export type Settings = {
   theme: string
   mode: Mode
-  badge: boolean // toolbar badge shows the failed-sync count
+  badge: boolean // toolbar icon shows the failed-sync count
   drawerWidth: number // px, dragged from the drawer's left edge
 }
 export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440 }

@@ -12,7 +12,10 @@
     "end_date",
     "reason",
     "display_reason",
-    "update_at"
+    "update_at",
+    "recovered_start",
+    "recovered_end",
+    "recovered_at"
   ],
   "rows": [
     [
@@ -28,7 +31,10 @@
       "2026-09-30",
       "JSONDecodeError('Extra data: line 1 column 68008 (char 68007)')",
       null,
-      "2026-10-01T06:36:26Z"
+      "2026-10-01T06:36:26Z",
+      null,
+      null,
+      null
     ]
   ],
   "affected_rows": 0,

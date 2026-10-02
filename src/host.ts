@@ -3,7 +3,7 @@
 // They read `host` / `output` (storage.session) and `run` plus each command's result key (storage.local).
 import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, pushLines, splitChunk, type Line } from './term'
-import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
+import { parseFailedSyncs, type FailedSyncs, type SyncRequests } from './failed-syncs'
 import { DATA_KEYS, envKey } from './table'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, parseMembers, parseUserHits, fromHex, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
@@ -170,6 +170,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
   const got = await chrome.storage.local.get(DATA_KEYS.map(k => envKey(env, k)))
   const s = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]]))) as {
     failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins; projectMembers?: ProjectMembers
+    syncRequests?: SyncRequests
   }
   const save = (o: Record<string, unknown>) => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
   if (run.command === 'delete-syncs') {
@@ -217,8 +218,11 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
     } catch { return { summary: 'Create finished; could not read the result. Check the pnpm server terminal.' } }
   }
   if (run.command === 'failed-syncs') {
-    const next = outcome<FailedSyncs>(s.failedSyncs, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))
-    return save({ failedSyncs: next })
+    const status = run.args?.sync_status ?? 'FAIL'
+    const fresh = (prev?: FailedSyncs) => outcome<FailedSyncs>(prev, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))
+    if (status === 'FAIL') return save({ failedSyncs: fresh(s.failedSyncs) })
+    if (status !== 'IN_PROGRESS' && status !== 'FRAGMENTED') return
+    return save({ syncRequests: { ...s.syncRequests, [status]: fresh(s.syncRequests?.[status]) } })
   }
   // Browse commands: a page per query; "load more" runs append to it (mergePage).
   const empty = <Q>(query: Q) => ({ at, runId: run.id, query, rows: [], hasMore: false })

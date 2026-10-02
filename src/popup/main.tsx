@@ -28,6 +28,8 @@ function Popup() {
   const theme = vars(settings.theme, dark)
   useEffect(() => { document.documentElement.style.background = theme['--bg'] }, [theme['--bg']])
   const n = fs?.rows.length ?? 0
+  const projects = new Set(fs?.rows.map(r => r.project)).size
+  const newest = Math.max(0, ...(fs?.rows ?? []).map(r => Date.parse(r.updatedAt) || 0))
   const st = run?.command === 'failed-syncs' ? runStatus(run, now) : undefined // this card is about failed-syncs only
 
   async function runIt() {
@@ -57,10 +59,11 @@ function Popup() {
         ) : !loaded ? null : hostProblem(host) ? (
           <HostSetup host={host} compact />
         ) : <>
-          <article className="card p-count" aria-busy={running}>
+          <article className="card p-count" aria-busy={running} data-tone={!fs ? undefined : n ? 'fail' : 'ok'}>
             <div>
               <p className="eyebrow">Failed sync requests · prod</p>
-              <strong className="p-num">{fs ? n : '–'}</strong>
+              <strong className="p-num">{fs ? n : '–'}{fs && !n && <Icon d="check" size={22} />}</strong>
+              {!!n && <p className="p-where muted">in {projects} project{projects === 1 ? '' : 's'} · newest {ago(newest, now)}</p>}
             </div>
             <div className="p-count-side">
               {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}

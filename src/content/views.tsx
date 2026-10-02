@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { call, MAX_TABS, type Run } from '../api'
 import { ago } from '../term'
-import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, type FailedSyncs } from '../failed-syncs'
+import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, liveFails, type FailedSyncs } from '../failed-syncs'
 import {
   pinnedFor, type Project, type ProjectConnection, type ConnectionHit, type FittingRoom, type Pins,
   type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery,
@@ -15,13 +15,14 @@ import { MembersPanel } from './members'
 import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
 export type { Exec } from './browse'
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
+export type OpenFailed = (c: Pick<ProjectConnection, 'connectionId' | 'name'>) => void
 type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 
 // ---------- Home: the command list ----------
 
 function CommandRow({ icon, title, sub, count, onClick }: { icon: IconName; title: string; sub: string; count?: number; onClick: () => void }) {
   return (
-    <button className="cmd-row" onClick={onClick}>
+    <button className="cmd-row" onClick={onClick} data-tone={count ? 'fail' : undefined}>
       <span className="cmd-icon"><Icon d={icon} size={18} /></span>
       <span className="cmd-text"><strong>{title}</strong><span className="muted">{sub}</span></span>
       {!!count && <span className="count-chip">{count}</span>}
@@ -47,8 +48,8 @@ export function Home({ pins, failedSyncs: fs, now, open, openProject }: {
       </div>
       <p className="eyebrow">Checks</p>
       <div className="cmd-list">
-        <CommandRow icon="alert" title="Failed syncs" count={n} onClick={() => open('failed')}
-          sub={fs?.at ? `${n} failed · updated ${ago(fs.at, now)}` : 'Fetch every sync_request with status FAIL'} />
+        <CommandRow icon="alert" title="Sync requests" count={n} onClick={() => open('failed')}
+          sub={fs?.at ? `${n} failed · updated ${ago(fs.at, now)}` : 'FAIL, IN_PROGRESS and FRAGMENTED sync_requests'} />
       </div>
       {!!pinned.length && <>
         <p className="eyebrow">Pinned projects</p>
@@ -119,19 +120,21 @@ const CONN_SORTS = [['status', 'Failing first'], ['service', 'Service'], ['name'
 
 const PROJECT_TABS = [['connections', 'Connections'], ['members', 'Members']] as const
 
-export function ProjectView({ project, cache, members, userSearch, pinned, pin, openProject, ...c }: {
-  project: ProjectRef; cache?: ProjectConnections; members?: ProjectMembers; userSearch?: UserSearch
-  pinned: boolean; pin: (p: Project) => void; openProject: (p: ProjectRef) => void
+export function ProjectView({ project, cache, members, userSearch, pinned, pin, openProject, openFailed, fs, ...c }: {
+  project: ProjectRef; cache?: ProjectConnections; fs?: FailedSyncs; members?: ProjectMembers; userSearch?: UserSearch
+  pinned: boolean; pin: (p: Project) => void; openProject: (p: ProjectRef) => void; openFailed: OpenFailed
 } & Common) {
   const [tab, setTab] = useState<'connections' | 'members'>('connections')
   const url = projectUrl(project.id)
   const full = project.status !== undefined
+  // Same source as the cards: a complete FAIL list from Sync requests beats the cached project row's count.
+  const failed = fs && !fs.error && !fs.truncated ? fs.rows.filter(r => r.projectId === project.id).length : project.failed
   return (
     <div className="pane">
       <div className="proj-head">
         <div>
           <p className="muted mono">{[project.plan, project.status, project.id.slice(0, 8)].filter(Boolean).join(' · ')}</p>
-          {full && <p className="status-counts"><span>{project.connections} connections</span>{!!project.failed && <span data-tone="fail">{project.failed} FAIL</span>}</p>}
+          {full && <p className="status-counts"><span>{project.connections} connections</span>{!!failed && <span data-tone="fail">{failed} FAIL</span>}</p>}
         </div>
         {full && <button className="icon-btn pin" aria-pressed={pinned} aria-label={pinned ? 'Unpin project' : 'Pin project'} title={pinned ? 'Unpin' : 'Pin to top'} onClick={() => pin(project as Project)}><Icon d="pin" /></button>}
         {url && <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a>}
@@ -139,12 +142,12 @@ export function ProjectView({ project, cache, members, userSearch, pinned, pin, 
       <Segmented label="Project section" value={tab} options={PROJECT_TABS} onChange={setTab} />
       {tab === 'members'
         ? <MembersPanel projectId={project.id} projectName={project.name} members={members?.[project.id]} search={userSearch} {...c} />
-        : <ProjectConnectionsPanel project={project} cache={cache} {...c} />}
+        : <ProjectConnectionsPanel project={project} cache={cache} openFailed={openFailed} fs={fs} {...c} />}
     </div>
   )
 }
 
-function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef; cache?: ProjectConnections } & Common) {
+function ProjectConnectionsPanel({ project, cache, openFailed, fs, ...c }: { project: ProjectRef; cache?: ProjectConnections; openFailed: OpenFailed; fs?: FailedSyncs } & Common) {
   const [query, setQuery] = useState<ConnectionsQuery>(() => cache?.[project.id]?.query ?? { q: '', sort: 'status' })
   const page = cache?.[project.id]
   const extra = { project: project.id }
@@ -154,7 +157,7 @@ function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef
       <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : 'This project has no data sources yet.'} />}
-        rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} />}>
+        rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name or platform" />
         <div className="filters">
           <Segmented label="Sort connections" value={query.sort} options={CONN_SORTS} onChange={sort => setQuery({ ...query, sort })} />
@@ -168,8 +171,9 @@ function ProjectConnectionsPanel({ project, cache, ...c }: { project: ProjectRef
 // Select mode (same UX as Failed syncs) opens the chosen connections' Refit pages in background tabs: deleting a
 // connection happens there, in Refit's own dialog, which checks fitting rooms and drops the connection's data table
 // and seed view. A plain DELETE here would leave those behind (see AGENTS.md).
-function ConnectionList({ rows, now, groupBy, openProject }: {
-  rows: (ProjectConnection & { project?: string })[]; now: number; groupBy?: 'service'; openProject?: (p: ProjectRef) => void
+function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageAt }: {
+  rows: (ProjectConnection & { project?: string })[]; now: number; groupBy?: 'service'; openProject?: (p: ProjectRef) => void; openFailed: OpenFailed
+  fs?: FailedSyncs; pageAt: number // the Sync requests FAIL list and this page's fetch time, for liveFails
 }) {
   const [open, setOpen] = useState<string>()
   const [selecting, setSelecting] = useState(false)
@@ -192,7 +196,7 @@ function ConnectionList({ rows, now, groupBy, openProject }: {
     <ul className="syncs" data-selecting={selecting}>
       {rows.map((c, i) => {
         const url = connectionUrl(c)
-        const reason = c.displayReason ?? c.reason
+        const { failed, reason } = liveFails(c, pageAt, fs)
         const expanded = open === c.connectionId
         const header = groupBy && (i === 0 || platform(rows[i - 1]) !== platform(c))
         const on = picked.has(c.connectionId)
@@ -217,7 +221,7 @@ function ConnectionList({ rows, now, groupBy, openProject }: {
                 {c.syncType && <><span className="mono">{c.syncType}</span> · </>}
                 {c.lastSync ? `last sync ${ago(Date.parse(c.lastSync), now)}` : 'no sync yet'}
                 {(c.start || c.end) && <> · <span className="mono">{dateRange(c)}</span></>}
-                {c.failed > 0 && <> · <span className="fail-text">{c.failed} FAIL total</span></>}
+                {failed > 0 && <> · <button className="fail-text fail-link" onClick={() => openFailed(c)} title="Show these failed syncs">{failed} FAIL total</button></>}
               </p>
               {reason && (
                 <button className="sync-reason" data-open={expanded} aria-expanded={expanded} onClick={() => setOpen(expanded ? undefined : c.connectionId)}
@@ -250,8 +254,8 @@ function ConnectionList({ rows, now, groupBy, openProject }: {
 
 // ---------- Connections search (all projects) ----------
 
-export function ConnectionsView({ page, query, setQuery, openProject, ...c }: {
-  page?: Connections; query: { q: string }; setQuery: (q: { q: string }) => void; openProject: (p: ProjectRef) => void
+export function ConnectionsView({ page, query, setQuery, openProject, openFailed, fs, ...c }: {
+  page?: Connections; fs?: FailedSyncs; query: { q: string }; setQuery: (q: { q: string }) => void; openProject: (p: ProjectRef) => void; openFailed: OpenFailed
 } & Common) {
   const b = useBrowse({ page, query, command: 'connections', ...c })
   return (
@@ -259,7 +263,7 @@ export function ConnectionsView({ page, query, setQuery, openProject, ...c }: {
       <Browse page={page} b={b} run={c.run} now={c.now} command="connections" cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections${page.query.q ? ` matching "${page.query.q}"` : ''}` : ''}
         empty={<Empty icon="search" title="No matching connections" text="Search matches connection name, platform (META, TIKTOK…) or id." />}
-        rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} />}>
+        rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ q })} placeholder="Search connections in every project" autoFocus />
       </Browse>
     </div>

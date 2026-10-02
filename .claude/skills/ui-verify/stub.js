@@ -21,6 +21,8 @@ const base = [
 const rows = (MODE === 'many' ? Array.from({ length: 30 }, (_, i) => base[i % base.length]) : base).map((r, i) => ({
   id: uuid(1000 + i).replace(/^0+/, m => 'a'.repeat(m.length)), connectionId: uuid(i + 1), projectId: uuid(900 + (i % 3)), project: r[1], name: r[0], kind: r[2],
   service: r[3], type: r[4], start: r[5], end: r[6], reason: r[7], displayReason: r[8], updatedAt: new Date(now - r[9] * 60000).toISOString().slice(0, 19) + 'Z',
+  // rows 2 and 4 have a later SUCCESS covering their end date ("Succeeded after" chip)
+  ...(i % base.length === 1 || i % base.length === 3 ? { recoveredStart: r[5], recoveredEnd: r[6], recoveredAt: new Date(now - 20 * 60000).toISOString().slice(0, 19) + 'Z' } : {}),
 }))
 const lines = [
   { s: 'sys', t: '$ failed-syncs' },
@@ -79,12 +81,18 @@ const host = MODE === 'offline' ? { state: 'offline' }
   : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
   : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections', 'connections', 'fitting-rooms'] }
-const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}) }, run, failedSyncs, projects, projectConnections, connections, fittingRooms, pins }
+// Sync requests tabs: two IN_PROGRESS rows (no reason), FRAGMENTED fetched with nothing in it
+const syncRequests = MODE === 'never' ? undefined : {
+  IN_PROGRESS: { at: now - 60000, runId: 'r2', truncated: false, rows: rows.slice(0, 2).map(r => ({ ...r, id: r.id.replace('aaaa', 'bbbb'), reason: null, displayReason: null, recoveredAt: null })) },
+  FRAGMENTED: { at: now - 60000, runId: 'r3', truncated: false, rows: [] },
+}
+const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}) }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).map(k => [k, data[k]]).filter(([, v]) => v !== undefined)), set: async () => {}, remove: async () => {} })
 window.chrome = {
   runtime: { id: 'abcdefghijklmnopabcdefghijklmnop', getManifest: () => ({ version: '0.1.0' }), openOptionsPage() {}, onMessage: { addListener() {} },
-    sendMessage: async () => ({ ok: true, data: undefined }) },
+    // Records each request on <html data-sent> so --dump-dom can check what a view asked for.
+    sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); return { ok: true, data: undefined } } },
   storage: { local: area(local), session: area(session), onChanged: { addListener() {}, removeListener() {} } },
   tabs: { create() {} },
 }

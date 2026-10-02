@@ -18,10 +18,10 @@ export function SettingsView({ settings, dark, host, onChange }: {
       </section>
       <section className="setting-row">
         <div>
-          <strong>Toolbar badge</strong>
+          <strong>Count on the toolbar icon</strong>
           <span className="muted">Show the failed-sync count on the extension icon</span>
         </div>
-        <Switch label="Toolbar badge" checked={settings.badge} onChange={badge => onChange({ badge })} />
+        <Switch label="Count on the toolbar icon" checked={settings.badge} onChange={badge => onChange({ badge })} />
       </section>
     </div>
   )

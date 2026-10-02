@@ -9,6 +9,7 @@ import { ENV } from '../table'
 import { Icon, type IconName } from '../shared/icons'
 
 export type Exec = (command: Command, args?: Args) => void
+const MAX_AGE = 30_000 // ms; ponytail: age only, a delete elsewhere within 30s still shows the old counts until refresh
 
 export function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value)
@@ -29,8 +30,11 @@ export function useBrowse<Q extends { q: string } & Record<string, string>, T>({
   const asked = useRef('') // the last query we requested, so a re-render doesn't re-request it
   const key = JSON.stringify([command, extra, wanted])
   const fresh = !!page && sameQuery(page.query, wanted)
+  // A page cached from an earlier visit still shows at once, but is fetched again in the background when it's older
+  // than MAX_AGE: otherwise statuses and FAIL counts stay as they were whenever the page was first loaded.
+  const [old] = useState(() => !!page && Date.now() - page.at > MAX_AGE)
   useEffect(() => {
-    if (!ready || fresh || asked.current === key) return
+    if (!ready || (fresh && !old) || asked.current === key) return
     asked.current = key
     exec(command, toArgs(wanted, 0, extra))
   }, [ready, key, fresh])

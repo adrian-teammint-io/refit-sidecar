@@ -7,12 +7,18 @@
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
         "{env}",
         "sql/failed-syncs.sql",
-        "500"
+        "500",
+        "--sync_status",
+        "{sync_status}"
       ],
       "params": {
         "env": {
           "pattern": "prod|stag",
           "default": "prod"
+        },
+        "sync_status": {
+          "pattern": "FAIL|IN_PROGRESS|FRAGMENTED",
+          "default": "FAIL"
         }
       },
       "timeoutMs": 90000

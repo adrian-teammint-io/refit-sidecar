@@ -17,7 +17,7 @@ import { useResize } from './resize'
 type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 type View =
   | { kind: 'home' }
-  | { kind: 'failed' }
+  | { kind: 'failed'; conn?: { id: string; name: string } } // conn: only that connection's failures
   | { kind: 'projects' }
   | { kind: 'connections' }
   | { kind: 'fitting' }
@@ -26,7 +26,7 @@ type View =
   | { kind: 'settings' }
 
 const TITLES: Record<View['kind'], string> = {
-  home: 'Refit Sidecar', failed: 'Failed syncs', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
+  home: 'Refit Sidecar', failed: 'Sync requests', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
   'new-project': 'New project', project: '', settings: 'Settings',
 }
 
@@ -46,7 +46,7 @@ class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }>
 
 export function App() {
   const store = useStore()
-  const { settings, host, run, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, loaded } = store
+  const { settings, host, run, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, syncRequests, loaded } = store
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
   // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
@@ -80,6 +80,7 @@ export function App() {
     const full = pins?.[p.id] ?? projects?.rows.find(r => r.id === p.id) ?? p
     push({ kind: 'project', project: full })
   }
+  const openFailed = (c: { connectionId: string; name: string }) => push({ kind: 'failed', conn: { id: c.connectionId, name: c.name.trim() } })
   const pin = (p: Project) => chrome.storage.local.set({ [envKey(ENV, 'pins')]: togglePin(pins ?? {}, p, Date.now()) })
 
   useEffect(() => {
@@ -87,7 +88,11 @@ export function App() {
     startedHere.current = undefined
     if (run.exit !== 0 || run.error) return flash(run.tail ?? runStatus(run, Date.now()).label)
     if (run.summary) flash(run.summary)
-    else if (run.command === 'failed-syncs') flash(`${n} failed sync${n === 1 ? '' : 's'}`)
+    else if (run.command === 'failed-syncs') {
+      const status = run.args?.sync_status
+      const k = status === 'IN_PROGRESS' || status === 'FRAGMENTED' ? syncRequests?.[status]?.rows.length ?? 0 : n
+      flash(`${k} ${status === 'IN_PROGRESS' ? 'in progress' : status === 'FRAGMENTED' ? 'fragmented' : 'failed'} sync${k === 1 ? '' : 's'}`)
+    }
   }, [run?.endedAt])
 
   useEffect(() => {
@@ -115,14 +120,14 @@ export function App() {
   else if (view.kind === 'settings') body = <SettingsView settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} />
   else if (hostProblem(host)) body = <HostSetup host={host} />
   else if (view.kind === 'home') body = <Home pins={pins} failedSyncs={fs} now={now} open={(k: HomeTarget) => push({ kind: k })} openProject={openProject} />
-  else if (view.kind === 'failed') body = <FailedView fs={fs} {...common} />
+  else if (view.kind === 'failed') body = <FailedView key={view.conn?.id} fs={fs} other={syncRequests} conn={view.conn} {...common} />
   else if (view.kind === 'projects') body = <ProjectsView projects={projects} pins={pins} query={projectsQuery} setQuery={setProjectsQuery} openProject={openProject} pin={pin} {...common} />
-  else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} {...common} />
+  else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} openFailed={openFailed} fs={fs} {...common} />
   else if (view.kind === 'fitting') body = <FittingRoomsView page={fittingRooms} query={fitQuery} setQuery={setFitQuery} openProject={openProject} {...common} />
   else if (view.kind === 'new-project') body = <NewProjectView search={userSearch} {...common}
     onCreated={p => setStack(s => [...s.slice(0, -1), { kind: 'project', project: p }])} />
   else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections} members={projectMembers} userSearch={userSearch}
-    pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} {...common} />
+    pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} openFailed={openFailed} fs={fs} {...common} />
 
   const title = view.kind === 'project' ? view.project.name : TITLES[view.kind]
 

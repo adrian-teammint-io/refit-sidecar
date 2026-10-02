@@ -19,10 +19,10 @@ export function PopupSettings({ settings, dark, host, onChange }: { settings: Se
 
       <section className="setting-row">
         <div>
-          <strong>Toolbar badge</strong>
+          <strong>Count on the toolbar icon</strong>
           <span className="muted">Failed-sync count on the icon, "!" when the host is missing</span>
         </div>
-        <Switch label="Toolbar badge" checked={settings.badge} onChange={badge => onChange({ badge })} />
+        <Switch label="Count on the toolbar icon" checked={settings.badge} onChange={badge => onChange({ badge })} />
       </section>
 
       <nav className="p-links">

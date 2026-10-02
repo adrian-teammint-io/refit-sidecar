@@ -24,6 +24,7 @@ async function handle(req: Req): Promise<unknown> {
     case 'hostStatus': connect(); return
     case 'openOptions': return chrome.runtime.openOptionsPage()
     case 'openTabs': return openTabs(req.urls)
+    case 'fonts': return (await chrome.fontSettings.getFontList()).map(f => f.displayName)
   }
 }
 

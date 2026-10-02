@@ -145,7 +145,7 @@ host/                     runs on your Mac (node), never in the browser
   install.mjs             install-host / uninstall-host
 public/manifest.json      MV3 manifest: content script on app.refit.ai + staging-app.refit.ai
 src/
-  api.ts                  Command union, Args, Req (run | cancel | hostStatus | openOptions | openTabs), call(), Run, HostState, MAX_TABS
+  api.ts                  Command union, Args, Req (run | cancel | hostStatus | openOptions | openTabs | fonts), call(), Run, HostState, MAX_TABS
   background.ts           worker entry: handle() routes Req, openTabs() (validated Refit URLs), paint() + countIcon() (count drawn as the toolbar icon)
   host.ts                 worker: connect() native port, startRun() (one at a time, latest wins, WRITES never queue),
                           onMessage(), finish() (run.tail, run.summary, run.result, follow-up `then`), storeResult() per command + env
@@ -220,7 +220,7 @@ src/
 | Which SQL is allowed, param validation | `host/protocol.mjs`, `host/commands.json` | `PARAMS`, `bindParams`, `WRITES`, `checkQuery`; the command's `params` patterns |
 | Running SQL through Tabularis (timeouts, errors) | `host/tabularis-query.mjs` | `fail`, `TIMEOUT_MS`, `onReply` |
 | Keyboard shortcuts (add, rebind UI, handling) | `keybinds.ts`, `shared/controls.tsx`, `content/App.tsx`, `popup/main.tsx` | `KEYBINDS`, `actionFor`, `rebind`, `KeybindList`, `data-refetch`; CSS `.keybinds`, `.key-capture` (ui.css) |
-| Theme, colours, mode, fonts, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `FontPicker` (`FONTS` suggestions), `fontFamily`, `SettingsView` |
+| Theme, colours, mode, fonts, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `FontPicker` (installed fonts from the worker's `fonts` Req, `chrome.fontSettings`; `FONTS` fallback suggestions), `fontFamily`, `SettingsView` |
 | Icons | `shared/icons.tsx` | `ICONS` (add a path), `Icon`, `IconBtn` |
 | Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; icon: `paint`, `countIcon` |
 | Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |

@@ -110,7 +110,7 @@ const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).ma
 window.chrome = {
   runtime: { id: 'abcdefghijklmnopabcdefghijklmnop', getManifest: () => ({ version: '0.1.0' }), openOptionsPage() {}, onMessage: { addListener() {} },
     // Records each request on <html data-sent> so --dump-dom can check what a view asked for.
-    sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); answer(req); return { ok: true, data: undefined } } },
+    sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); answer(req); return { ok: true, data: req.type === 'fonts' ? ['Helvetica Neue', 'Inter', 'Menlo', 'SF Mono'] : undefined } } },
   storage: { local: area(local), session: area(session), onChanged: { addListener: f => listeners.push(f), removeListener() {} } },
   tabs: { create() {} },
 }

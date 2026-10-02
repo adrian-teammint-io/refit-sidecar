@@ -12,6 +12,7 @@ export type Req =
   | { type: 'hostStatus' } // connect (or reconnect) to the host if not connected; the state lands in storage
   | { type: 'openOptions' }
   | { type: 'openTabs'; urls: string[] } // Refit connection pages only, at most MAX_TABS (checked in background.ts)
+  | { type: 'fonts' } // installed font names (chrome.fontSettings, worker only), for the font settings
 
 // chrome.storage.session `host`
 export type HostState =

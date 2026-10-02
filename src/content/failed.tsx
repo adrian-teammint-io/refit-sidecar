@@ -1,15 +1,14 @@
 // Sync requests: the failed-syncs list per status tab (FAIL default, IN_PROGRESS, FRAGMENTED), plus select + delete
 // (delete-syncs, FAIL tab only: the DELETE only removes FAIL rows), like fish refit-sync_delete. Delete is occasional, so it hides behind a Select mode: cards get a check, a sticky bulk bar holds the count and
 // Delete, and that bar expands in place into the confirm (preview, environment; Tabularis approval is the last gate).
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ago, plural, runOk, runStatus } from '../term'
 import { dateRange, SYNC_STATUSES, type FailedSyncs, type SyncRequests, type SyncStatus } from '../failed-syncs'
 import { ENV } from '../table'
-import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
-import { Empty, ErrorBanner, RunBar, Skeleton, commandState, type Common } from './browse'
+import { Empty, ErrorBanner, MAX_AGE, RunBar, Skeleton, commandState, type Common } from './browse'
 import { SelectionRow, WriteConfirm, useSelection } from './ui'
 
 
@@ -46,9 +45,14 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
   // A finished delete: its rows are gone, so leave select mode.
   useEffect(() => { if (last?.command === 'delete-syncs' && del.ok) exit() }, [last?.id])
 
-  // Opened from a connection's FAIL count with nothing fetched yet: fetch once instead of showing an empty list.
-  // Opening a tab that was never fetched fetches it once.
-  useEffect(() => { if ((focus || status !== 'FAIL') && !fs && ready && !isRunning(run)) load() }, [status])
+  // Opening Sync requests, or switching to a tab, fetches that tab again when it was never fetched or is older than
+  // MAX_AGE (the browse views' rule); its cached rows stay on screen, dimmed, meanwhile. Once per visit to a tab.
+  const asked = useRef<SyncStatus>(undefined)
+  useEffect(() => {
+    if (!ready || asked.current === status || mine || (fs && Date.now() - fs.at <= MAX_AGE)) return
+    asked.current = status
+    load()
+  }, [status, ready])
   const counts = { FAIL: failed, ...other } as Partial<Record<SyncStatus, FailedSyncs>>
 
   return (
@@ -75,7 +79,9 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
             ? `None for this connection in the last fetch${fs.truncated ? ' (older ones were cut by the query limit)' : ''}. Fetch again to refresh.`
             : `No sync_request on ${ENV_NAME} has status ${status}.`} />
         : <>
-            <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle} />
+            <div className="results" data-stale={mine}>
+              <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle} />
+            </div>
             {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older ones were cut by the query limit.</p>}
           </>}
       {selecting && (

@@ -12,7 +12,7 @@ export type Exec = (command: Command, args?: Args) => void
 // What every view gets from App for the one run slot: the current run, the clock, host readiness, run and cancel.
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
 export type OpenFailed = (c: { connectionId: string; name: string }) => void // opens Sync requests for one connection
-const MAX_AGE = 30_000 // ms; ponytail: age only, a delete elsewhere within 30s still shows the old counts until refresh
+export const MAX_AGE = 30_000 // ms; ponytail: age only, a delete elsewhere within 30s still shows the old counts until refresh
 
 // A status line's count: "30+ projects" while more batches exist, "12 projects" once all are loaded.
 export const pageCount = (page: Page<unknown, object>, noun: string) => `${page.rows.length}${page.hasMore ? '+' : ''} ${noun}`

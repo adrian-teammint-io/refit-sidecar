@@ -226,10 +226,10 @@
 .bulk-count b { color: var(--text); font-weight: 600; }
 .bulk .link-btn { margin: 0; color: var(--accent); font-weight: 500; }
 .light .bulk .link-btn { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.bulk-title { display: flex; align-items: center; gap: 8px; }
+.bulk-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .bulk-title strong { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .bulk-env { font: 700 10px/1 var(--mono); letter-spacing: 0.06em; padding: 4px 6px; border-radius: 5px; background: #dc2626; color: #fff; }
-.bulk[data-env='stag'] .bulk-env { background: #f59e0b; color: #1c1300; }
+.bulk-env[data-env='stag'] { background: #f59e0b; color: #1c1300; }
 .bulk-rows { list-style: none; margin: 0; padding: 6px 0; display: flex; flex-direction: column; border-block: 1px solid var(--line); }
 .bulk-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 3px 0; font-size: 12px; }
 .bulk-rows li.muted { display: block; font-size: 11.5px; }
@@ -277,9 +277,9 @@
 .hit:disabled { opacity: 0.6; }
 .picked { background: var(--bg); border: 1px solid var(--line); }
 .picked .link-btn { margin: 0; flex-shrink: 0; }
-.add-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+.add-confirm { font-size: 12.5px; }
 .add-confirm b { font-weight: 600; overflow-wrap: anywhere; }
-.add-panel[data-env='stag'] .bulk-env { background: #f59e0b; color: #1c1300; }
+
 .add-panel .bulk-type input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* New project form */

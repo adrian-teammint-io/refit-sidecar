@@ -10,6 +10,7 @@ import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
 import { Empty, ErrorBanner, Skeleton, commandState } from './browse'
+import { WriteConfirm } from './ui'
 import type { Common } from './views'
 
 const MAX_DELETE = 100 // the delete-syncs ids param takes at most 100
@@ -85,7 +86,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
             {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older ones were cut by the query limit.</p>}
           </>}
       {selecting && (
-        <div className="bulk" data-open={confirming} data-env={ENV} role={confirming ? 'alertdialog' : 'toolbar'} aria-label={confirming ? 'Confirm delete' : 'Selection'}
+        <div className="bulk" data-open={confirming} role={confirming ? 'alertdialog' : 'toolbar'} aria-label={confirming ? 'Confirm delete' : 'Selection'}
           onKeyDown={e => { if (e.key === 'Escape' && confirming) { e.stopPropagation(); setConfirming(false) } }}>
           {confirming && !!selected.length
             ? <Confirm rows={selected} busy={del.busy} deleting={deleting}
@@ -110,32 +111,19 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
 function Confirm({ rows, busy, deleting, onCancel, onDelete }: {
   rows: Row[]; busy?: string; deleting: boolean; onCancel: () => void; onDelete: () => void
 }) {
-  const prod = ENV === 'prod'
   const tooMany = rows.length > MAX_DELETE
-  const ready = !tooMany && !busy && !deleting
-  const plural = rows.length === 1 ? '' : 's'
-  return <>
-    <div className="bulk-title">
-      <span className="bulk-env">{prod ? 'PROD' : 'STAG'}</span>
-      <strong>Delete {rows.length} failed sync{plural}?</strong>
-    </div>
-    <ul className="bulk-rows">
-      {rows.slice(0, 5).map(r => (
-        <li key={r.id}><span className="mono muted">{r.id.slice(0, 8)}</span><span className="bulk-name">{r.name}</span><span className="mono muted">{dateRange(r)}</span></li>
-      ))}
-      {rows.length > 5 && <li className="muted">and {rows.length - 5} more</li>}
-    </ul>
-    <p className="bulk-note muted">
-      {deleting ? <>Waiting for approval in the <b>Tabularis</b> app…</> : <>Approve it in Tabularis when asked. Rows no longer FAIL are kept. This can't be undone.</>}
-    </p>
-    {tooMany && <p className="fail-text">At most {MAX_DELETE} per delete.</p>}
-    {busy && <p className="muted">Wait for {busy} to finish.</p>}
-    <div className="bulk-row">
-      <span className="spacer" />
-      <button className="btn ghost sm" onClick={onCancel} disabled={deleting}>Back</button>
-      <button className="btn danger sm" disabled={!ready} onClick={onDelete} autoFocus aria-busy={deleting}>
-        {deleting ? 'Waiting…' : `Delete ${rows.length}`}
-      </button>
-    </div>
-  </>
+  return (
+    <WriteConfirm title={<strong>Delete {rows.length} failed sync{rows.length === 1 ? '' : 's'}?</strong>} waiting={deleting} busy={busy} autoFocus
+      preview={
+        <ul className="bulk-rows">
+          {rows.slice(0, 5).map(r => (
+            <li key={r.id}><span className="mono muted">{r.id.slice(0, 8)}</span><span className="bulk-name">{r.name}</span><span className="mono muted">{dateRange(r)}</span></li>
+          ))}
+          {rows.length > 5 && <li className="muted">and {rows.length - 5} more</li>}
+        </ul>
+      }
+      note="Approve it in Tabularis when asked. Rows no longer FAIL are kept. This can't be undone."
+      problem={tooMany ? `At most ${MAX_DELETE} per delete.` : undefined}
+      onBack={onCancel} action={{ label: `Delete ${rows.length}`, danger: true, disabled: tooMany, onClick: onDelete }} />
+  )
 }

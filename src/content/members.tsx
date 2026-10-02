@@ -7,6 +7,7 @@ import { ROLES, cleanQuery, toHex, type Members, type Role, type UserHit, type U
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, commandState, useDebounced } from './browse'
+import { WriteConfirm } from './ui'
 import type { Common } from './views'
 
 const ROLE_OPTIONS = ROLES.map(r => [r, r[0].toUpperCase() + r.slice(1)] as const)
@@ -50,23 +51,19 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
 } & Common) {
   const [picked, setPicked] = useState<UserHit>()
   const [role, setRole] = useState<Role>('viewer')
-  const [typed, setTyped] = useState('')
   const extra = { project: projectId }
   const { mine: saving, busy, last, ok: added } = commandState(run, 'add-project-user', extra)
   // A finished add (added, or already a member): the members list reloads by itself; close the form.
   useEffect(() => { if (added) onClose() }, [last?.id])
-  const prod = ENV === 'prod'
-  const handle = picked ? picked.email.split('@')[0] : ''
-  const ok = !!picked && !picked.memberRole && !saving && !busy && (!prod || typed.trim().toLowerCase() === handle.toLowerCase())
 
   return (
-    <div className="add-panel" data-env={ENV}>
+    <div className="add-panel">
       <div className="add-title">
         <strong>Add user</strong>
         <span className="spacer" />
         <button className="icon-btn sm" aria-label="Close add user" title="Close" onClick={onClose}><Icon d="x" size={14} /></button>
       </div>
-      {!picked ? <UserPicker projectId={projectId} search={search} run={run} ready={ready} exec={exec} onPick={u => { setPicked(u); setTyped('') }} />
+      {!picked ? <UserPicker projectId={projectId} search={search} run={run} ready={ready} exec={exec} onPick={setPicked} />
       : <>
         <div className="picked">
           <span className="avatar" aria-hidden>{(picked.name || picked.email)[0].toUpperCase()}</span>
@@ -74,27 +71,11 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
           <button className="link-btn" onClick={() => setPicked(undefined)} disabled={saving}>Change</button>
         </div>
         <Segmented label="Role" value={role} options={ROLE_OPTIONS} onChange={setRole} />
-        <p className="add-confirm">
-          <span className="bulk-env">{prod ? 'PROD' : 'STAG'}</span>
-          Add <b>{picked.email}</b> to <b>{projectName}</b> as <b>{role}</b>?
-        </p>
-        <p className="hint muted">{saving ? <>Waiting for approval in the <b>Tabularis</b> app…</> : 'Approve it in Tabularis when asked. If they are already a member, nothing changes.'}</p>
-        {busy && <p className="hint muted">Wait for {busy} to finish.</p>}
-        <div className="bulk-row">
-          {prod && !saving && (
-            <label className="bulk-type">
-              <span>Type <b className="mono">{handle}</b></span>
-              <input value={typed} onChange={e => setTyped(e.target.value)} aria-label={`Type ${handle} to confirm`} autoFocus spellCheck={false}
-                style={{ width: `${Math.max(8, handle.length + 3)}ch` }}
-                onKeyDown={e => { if (e.key === 'Enter' && ok) exec('add-project-user', { env: ENV, user: picked.id, project: projectId, role }) }} />
-            </label>
-          )}
-          <span className="spacer" />
-          <button className="btn primary sm" disabled={!ok} aria-busy={saving}
-            onClick={() => exec('add-project-user', { env: ENV, user: picked.id, project: projectId, role })}>
-            {saving ? 'Waiting…' : <><Icon d="plus" size={13} />Add as {role}</>}
-          </button>
-        </div>
+        <WriteConfirm waiting={saving} busy={busy} typeWord={picked.email.split('@')[0]} autoFocus
+          title={<span className="add-confirm">Add <b>{picked.email}</b> to <b>{projectName}</b> as <b>{role}</b>?</span>}
+          note="Approve it in Tabularis when asked. If they are already a member, nothing changes."
+          action={{ label: <><Icon d="plus" size={13} />Add as {role}</>, disabled: !!picked.memberRole,
+            onClick: () => exec('add-project-user', { env: ENV, user: picked.id, project: projectId, role }) }} />
       </>}
     </div>
   )

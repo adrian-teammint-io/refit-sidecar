@@ -7,6 +7,7 @@ import { NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Role, type User
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { commandState } from './browse'
+import { WriteConfirm } from './ui'
 import { UserPicker } from './members'
 import type { Common } from './views'
 
@@ -38,7 +39,7 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
   const [status, setStatus] = useState<(typeof PROJECT_STATUSES)[number]>('PAUSED')
   const [end, setEnd] = useState(inAMonth)
   const [picking, setPicking] = useState<'owner' | 'member'>()
-  const [typed, setTyped] = useState('')
+
   const [defaulted, setDefaulted] = useState(false)
 
   // Pre-fill the default member: look the email up once, then add the exact match as admin. Only a search newer
@@ -66,8 +67,6 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
     !/^\d{4}-\d{2}-\d{2}$/.test(end) && 'Pick an end date.',
     extras.length > MAX_MEMBERS && `At most ${MAX_MEMBERS} members.`,
   ].filter(Boolean) as string[]
-  const prod = ENV === 'prod'
-  const ok = !problems.length && !busy && !creating && (!prod || typed === trimmed)
   const create = () => owner && exec('create-project', {
     env: ENV, name: toHex(trimmed), user: owner.id, status, plan, end, members: extras.map(m => `${m.user.id}:${m.role}`).join(','),
   })
@@ -135,30 +134,12 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
         {status === 'ACTIVE' && end <= today && <p className="hint fail-text">ACTIVE with an end date of today or earlier gets picked up by billing / expiry right away.</p>}
       </section>
 
-      <div className="bulk np-confirm" data-open="true" data-env={ENV}>
-        <div className="bulk-title">
-          <span className="bulk-env">{prod ? 'PROD' : 'STAG'}</span>
-          <strong>{trimmed ? `Create "${trimmed}"` : 'Create project'}</strong>
-        </div>
-        <p className="bulk-note muted">
-          {creating ? <>Waiting for approval in the <b>Tabularis</b> app…</>
-            : problems.length ? problems.join(' ')
+      <div className="bulk np-confirm" data-open="true">
+        <WriteConfirm waiting={creating} busy={busy} typeWord={problems.length ? undefined : trimmed} typeLabel="Type the name"
+          title={<strong>{trimmed ? `Create "${trimmed}"` : 'Create project'}</strong>}
+          note={problems.length ? problems.join(' ')
             : `${plan} · ${status} · ends ${end} · owner ${owner!.email} + ${extras.length} member${extras.length === 1 ? '' : 's'}. Approve it in Tabularis when asked.`}
-        </p>
-        {busy && <p className="muted">Wait for {busy} to finish.</p>}
-        <div className="bulk-row">
-          {prod && !creating && !problems.length && (
-            <label className="bulk-type">
-              <span>Type the name</span>
-              <input value={typed} onChange={e => setTyped(e.target.value)} aria-label="Type the project name to confirm" spellCheck={false}
-                style={{ width: `${Math.min(24, Math.max(8, trimmed.length + 3))}ch` }} onKeyDown={e => { if (e.key === 'Enter' && ok) create() }} />
-            </label>
-          )}
-          <span className="spacer" />
-          <button className="btn primary sm" disabled={!ok} aria-busy={creating} onClick={create}>
-            {creating ? 'Waiting…' : <><Icon d="plus" size={13} />Create project</>}
-          </button>
-        </div>
+          action={{ label: <><Icon d="plus" size={13} />Create project</>, disabled: !!problems.length, onClick: create }} />
       </div>
     </div>
   )

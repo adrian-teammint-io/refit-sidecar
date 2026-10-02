@@ -43,7 +43,7 @@ type Def<K extends View['kind']> = {
 
 export const VIEWS: { [K in View['kind']]: Def<K> } = {
   home: {
-    title: 'Refit Sidecar',
+    title: '', // the header shows only the mark on Home; deeper crumbs call it Home
     render: (_, x) => <Home pins={x.store.pins} failedSyncs={x.store.failedSyncs} now={x.common.now} open={kind => x.push({ kind })} openProject={x.openProject} />,
   },
   projects: {

@@ -24,9 +24,9 @@ setTimeout(() => {
   const type = (input, v) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(input, v); input.dispatchEvent(new Event('input', { bubbles: true })) }
   setTimeout(() => {
     if (__MODE === 'settings') return s.querySelector('[aria-label="Settings"]').click()
-    // Home rows: Projects, Connections, Fitting rooms, Failed syncs
-    const at = { projects: 0, project: 0, connections: 1, fitting: 2, failed: 3 }[__NAV]
-    if (at !== undefined) rows()[at].click()
+    // Home rows by title, so reordering Home doesn't break nav
+    const title = { projects: 'Projects', project: 'Projects', connections: 'Connections', fitting: 'Fitting rooms', failed: 'Sync requests' }[__NAV]
+    if (title) [...rows()].find(r => r.querySelector('strong').textContent === title).click()
     setTimeout(() => {
       if (__NAV !== 'home' && __Q) type(s.querySelector('.search input'), __Q)
       if (__NAV === 'project') [...s.querySelectorAll('.proj-list')].at(-1).querySelector('.proj').click() // the first unpinned row has cached connections

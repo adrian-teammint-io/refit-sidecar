@@ -10,7 +10,7 @@ import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
 import { Empty, ErrorBanner, Skeleton, commandState } from './browse'
-import { WriteConfirm } from './ui'
+import { SelectionRow, WriteConfirm, useSelection } from './ui'
 import type { Common } from './views'
 
 const MAX_DELETE = 100 // the delete-syncs ids param takes at most 100
@@ -32,20 +32,20 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
   const rows = (fs?.rows ?? []).filter(r => !conn || r.connectionId === conn.id)
   const n = rows.length
   const [selecting, setSelecting] = useState(false)
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const sel = useSelection(rows, r => r.id, MAX_DELETE)
+  const { selected } = sel
   const [confirming, setConfirming] = useState(false)
-  const selected = rows.filter(r => picked.has(r.id)) // only rows still listed
+
   const fetching = commandState(run, 'failed-syncs'), del = commandState(run, 'delete-syncs')
   const mine = fetching.mine && ofTab(run)
   const deleting = del.mine
   const last = (ofTab(run) ? fetching.last : undefined) ?? (status === 'FAIL' ? del.last : undefined)
   // A clean fetch is already said by "updated 2m ago"; the pill only shows a failed run or a delete's result.
   const st = last && (last.command === 'delete-syncs' || last.exit !== 0 || last.error) ? runStatus(last, now) : undefined
-  const exit = () => { setSelecting(false); setPicked(new Set()); setConfirming(false) }
+  const exit = () => { setSelecting(false); sel.clear(); setConfirming(false) }
   // A finished delete: its rows are gone, so leave select mode.
   useEffect(() => { if (last?.command === 'delete-syncs' && del.ok) exit() }, [last?.id])
-  const toggle = (id: string) => setPicked(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s })
-  const allOn = !!n && selected.length === Math.min(n, MAX_DELETE)
+
   // Opened from a connection's FAIL count with nothing fetched yet: fetch once instead of showing an empty list.
   // Opening a tab that was never fetched fetches it once.
   useEffect(() => { if ((focus || status !== 'FAIL') && !fs && ready && !isRunning(run)) load() }, [status])
@@ -74,7 +74,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
         <div className="list-tools">
           <span className="muted">Only <b>{conn.name}</b></span>
           <span className="spacer" />
-          <button className="link-btn" onClick={() => { setConn(undefined); setPicked(new Set()) }}>Show all {fs?.rows.length ?? ''}</button>
+          <button className="link-btn" onClick={() => { setConn(undefined); sel.clear() }}>Show all {fs?.rows.length ?? ''}</button>
         </div>
       )}
       {!fs ? (mine ? <Skeleton rows={3} /> : <Empty icon="terminal" title="No results yet" text={<><b>Fetch</b> runs <code>failed-syncs</code> in your <code>pnpm server</code> terminal and lists every {ENV_NAME} sync_request with status {status}.</>} />)
@@ -82,7 +82,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
             ? `None for this connection in the last fetch${fs.truncated ? ' (older ones were cut by the query limit)' : ''}. Fetch again to refresh.`
             : `No sync_request on ${ENV_NAME} has status ${status}.`} />
         : <>
-            <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={picked} onToggle={toggle} />
+            <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle} />
             {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older ones were cut by the query limit.</p>}
           </>}
       {selecting && (
@@ -91,16 +91,11 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
           {confirming && !!selected.length
             ? <Confirm rows={selected} busy={del.busy} deleting={deleting}
                 onCancel={() => setConfirming(false)} onDelete={() => exec('delete-syncs', { env: ENV, ids: selected.map(r => r.id).join(',') })} />
-            : <div className="bulk-row">
-                <span className="bulk-count"><b>{selected.length}</b> selected</span>
-                <button className="link-btn" onClick={() => setPicked(allOn ? new Set() : new Set(rows.slice(0, MAX_DELETE).map(r => r.id)))}>
-                  {allOn ? 'Clear' : n > MAX_DELETE ? `Select first ${MAX_DELETE}` : `Select all ${n}`}
-                </button>
-                <span className="spacer" />
+            : <SelectionRow sel={sel}>
                 <button className="btn danger sm" disabled={!selected.length} onClick={() => setConfirming(true)}>
                   <Icon d="trash" size={13} />Delete{selected.length ? ` ${selected.length}` : ''}
                 </button>
-              </div>}
+              </SelectionRow>}
         </div>
       )}
     </div>

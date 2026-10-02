@@ -13,6 +13,7 @@ import { Icon, type IconName } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { MembersPanel } from './members'
 import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
+import { SelectionRow, useSelection } from './ui'
 export type { Exec } from './browse'
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
 export type OpenFailed = (c: Pick<ProjectConnection, 'connectionId' | 'name'>) => void
@@ -186,14 +187,13 @@ function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageA
   selecting: boolean; setSelecting: (v: boolean) => void // owned by the panel: its Select toggle lives in the status line
 }) {
   const [open, setOpen] = useState<string>()
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+
   const [err, setErr] = useState('')
   const selectable = rows.filter(c => connectionUrl(c))
-  const selected = selectable.filter(c => picked.has(c.connectionId))
-  const toggle = (id: string) => setPicked(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const sel = useSelection(selectable, c => c.connectionId, MAX_TABS)
+  const { selected, toggle } = sel
   const exit = () => setSelecting(false)
-  useEffect(() => { if (!selecting) { setPicked(new Set()); setErr('') } }, [selecting])
-  const allOn = !!selectable.length && selected.length === Math.min(selectable.length, MAX_TABS)
+  useEffect(() => { if (!selecting) { sel.clear(); setErr('') } }, [selecting])
   const openAll = () => call({ type: 'openTabs', urls: selected.map(c => connectionUrl(c)!) }).then(exit, e => setErr((e as Error).message))
   return <>
     {selecting && <p className="list-tools muted">Pick connections to open in Refit (delete them there)</p>}
@@ -203,7 +203,7 @@ function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageA
         const { failed, reason } = liveFails(c, pageAt, fs)
         const expanded = open === c.connectionId
         const header = groupBy && (i === 0 || platform(rows[i - 1]) !== platform(c))
-        const on = picked.has(c.connectionId)
+        const on = sel.picked.has(c.connectionId)
         const pick = selecting && url ? (e: React.MouseEvent) => { if (!(e.target as Element).closest('a, button')) toggle(c.connectionId) } : undefined
         return (
           <li key={c.connectionId} className="conn-item" style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
@@ -238,16 +238,11 @@ function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageA
     </ul>
     {selecting && (
       <div className="bulk" role="toolbar" aria-label="Selected connections">
-        <div className="bulk-row">
-          <span className="bulk-count"><b>{selected.length}</b> selected</span>
-          <button className="link-btn" onClick={() => setPicked(allOn ? new Set() : new Set(selectable.slice(0, MAX_TABS).map(c => c.connectionId)))}>
-            {allOn ? 'Clear' : selectable.length > MAX_TABS ? `Select first ${MAX_TABS}` : `Select all ${selectable.length}`}
-          </button>
-          <span className="spacer" />
+        <SelectionRow sel={sel}>
           <button className="btn primary sm" disabled={!selected.length || selected.length > MAX_TABS} onClick={openAll}>
             <Icon d="external" size={13} />Open {selected.length || ''} in Refit
           </button>
-        </div>
+        </SelectionRow>
         <p className="bulk-note muted">
           {err || (selected.length > MAX_TABS ? `At most ${MAX_TABS} tabs at once.` : 'Opens each in a background tab. Delete it there: Refit checks fitting rooms and removes its data table.')}
         </p>

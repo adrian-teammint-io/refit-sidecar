@@ -8,7 +8,7 @@ import type { Settings } from '../themes'
 import { SettingsView } from './Settings'
 import { FailedView } from './failed'
 import { NewProjectView } from './new-project'
-import type { Common } from './browse'
+import type { Common, Find } from './browse'
 import { Home } from './home'
 import { ProjectsView, ProjectView } from './projects'
 import { ConnectionsView } from './connections'
@@ -30,7 +30,7 @@ type State<T> = [T, (v: T) => void]
 export type Ctx = {
   store: ReturnType<typeof useStore>; common: Common; dark: boolean; saveSettings: (s: Partial<Settings>) => void
   push: (v: View) => void; replace: (v: View) => void
-  openProject: (p: ProjectRef) => void; openFailed: (c: { connectionId: string; name: string }) => void; pin: (p: Project) => void
+  openProject: (p: ProjectRef) => void; openFailed: (c: { connectionId: string; name: string }) => void; find: Find; pin: (p: Project) => void
   queries: { projects: State<ProjectsQuery>; connections: State<{ q: string }>; fitting: State<{ q: string }> }
 }
 
@@ -82,7 +82,7 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
   },
   failed: {
     title: 'Sync requests',
-    render: (v, x) => <FailedView key={v.conn?.id} fs={x.store.failedSyncs} other={x.store.syncRequests} conn={v.conn} {...x.common} />,
+    render: (v, x) => <FailedView key={v.conn?.id} fs={x.store.failedSyncs} other={x.store.syncRequests} conn={v.conn} find={x.find} {...x.common} />,
   },
   settings: {
     title: 'Settings', noHost: true,

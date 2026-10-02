@@ -8,7 +8,7 @@ import { ENV } from '../table'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
-import { Empty, ErrorBanner, MAX_AGE, RunBar, Skeleton, commandState, type Common } from './browse'
+import { Empty, ErrorBanner, MAX_AGE, RunBar, Skeleton, commandState, type Common, type Find } from './browse'
 import { SelectionRow, WriteConfirm, useSelection } from './ui'
 
 
@@ -18,8 +18,8 @@ type Row = FailedSyncs['rows'][number]
 
 const WHAT: Record<SyncStatus, string> = { FAIL: 'failed', IN_PROGRESS: 'in progress', FRAGMENTED: 'fragmented' }
 
-export function FailedView({ fs: failed, other, conn: focus, run, now, ready, exec, cancel }: {
-  fs?: FailedSyncs; other?: SyncRequests; conn?: { id: string; name: string }
+export function FailedView({ fs: failed, other, conn: focus, find, run, now, ready, exec, cancel }: {
+  fs?: FailedSyncs; other?: SyncRequests; conn?: { id: string; name: string }; find: Find
 } & Common) {
   const [status, setStatus] = useState<SyncStatus>('FAIL')
   const fs = status === 'FAIL' ? failed : other?.[status]
@@ -80,7 +80,8 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
             : `No sync_request on ${ENV_NAME} has status ${status}.`} />
         : <>
             <div className="results" data-stale={mine}>
-              <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle} />
+              <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle}
+                findConnection={r => find('connections', r.connectionId)} findProject={r => find('projects', r.projectId)} />
             </div>
             {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older ones were cut by the query limit.</p>}
           </>}

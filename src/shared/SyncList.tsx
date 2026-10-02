@@ -1,5 +1,6 @@
 // Parsed failed sync_requests as cards. The drawer shows all of them; the popup passes `limit`.
 // With `selecting` (the drawer's Failed syncs select mode), a check appears and clicking a card toggles it.
+// The drawer passes findConnection / findProject: the connection name and project name then open that search, filtered to it.
 import { useState } from 'react'
 import { dateRange, platform, type FailedSync, type SyncStatus } from '../failed-syncs'
 import { connectionUrl } from '../links'
@@ -7,9 +8,10 @@ import { ago } from '../term'
 import { Icon } from './icons'
 import { CardHead, pickOnClick, stagger } from './card'
 
-export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting, selected, onToggle }: {
+export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting, selected, onToggle, findConnection, findProject }: {
   rows: FailedSync[]; now: number; limit?: number; newTab?: boolean; status?: SyncStatus
   selecting?: boolean; selected?: Set<string>; onToggle?: (id: string) => void
+  findConnection?: (r: FailedSync) => void; findProject?: (r: FailedSync) => void
 }) {
   const [open, setOpen] = useState<string>()
   const shown = limit ? rows.slice(0, limit) : rows
@@ -26,6 +28,7 @@ export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting,
           <li key={r.id} className="sync" data-selected={selecting && on} onClick={pickOnClick(canPick, () => onToggle!(r.id))} style={stagger(i)}>
             {/* The popup (newTab) is height-capped and hides the foot, so it keeps the compact icon link in the head. */}
             <CardHead badge={platform(r)} title={r.name}
+              onTitle={findConnection && { label: `Find connection ${r.name}`, onClick: () => findConnection(r) }}
               check={canPick ? { on, label: `Select ${r.name} (${r.id.slice(0, 8)})`, onToggle: () => onToggle!(r.id) } : undefined}
               link={url && newTab ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open in Refit', newTab } : undefined}>
               {r.recoveredAt && (
@@ -34,7 +37,9 @@ export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting,
                 </span>
               )}
             </CardHead>
-            <p className="sync-meta muted"><span title={r.project}>{r.project}</span> · <span className="mono">{r.type}</span> · <span className="mono">{dateRange(r)}</span></p>
+            <p className="sync-meta muted">{findProject
+              ? <button className="text-link" title={`Find project ${r.project}`} onClick={() => findProject(r)}>{r.project}</button>
+              : <span title={r.project}>{r.project}</span>} · <span className="mono">{r.type}</span> · <span className="mono">{dateRange(r)}</span></p>
             {reason && (
               <button className="sync-reason" data-open={expanded} aria-expanded={expanded} onClick={() => setOpen(expanded ? undefined : r.id)}
                 title={expanded ? 'Collapse' : 'Show full reason'}>

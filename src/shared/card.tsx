@@ -10,9 +10,10 @@ export const stagger = (i: number) => ({ '--i': Math.min(i, 12) }) as CSSPropert
 export const pickOnClick = (selecting: boolean, toggle: () => void) =>
   selecting ? (e: MouseEvent) => { if (!(e.target as Element).closest('a, button')) toggle() } : undefined
 
-// A card's top row: select check, badge, title, then the view's chips, then the open link.
-export function CardHead({ badge, title, check, link, children }: {
+// A card's top row: select check, badge, title (a button with `onTitle`), then the view's chips, then the open link.
+export function CardHead({ badge, title, onTitle, check, link, children }: {
   badge: ReactNode; title: string; children?: ReactNode
+  onTitle?: { label: string; onClick: () => void }
   check?: { on: boolean; label: string; onToggle: () => void }
   link?: { href: string; label: string; title: string; newTab?: boolean }
 }) {
@@ -22,7 +23,7 @@ export function CardHead({ badge, title, check, link, children }: {
         <button className="check" role="checkbox" aria-checked={check.on} aria-label={check.label} onClick={check.onToggle}><Icon d="check" size={12} /></button>
       )}
       <span className="badge">{badge}</span>
-      <strong title={title}>{title}</strong>
+      <strong title={title}>{onTitle ? <button className="text-link" aria-label={onTitle.label} onClick={onTitle.onClick}>{title}</button> : title}</strong>
       {children}
       {link && (
         <a className="icon-btn sync-link" href={link.href} {...(link.newTab ? { target: '_blank', rel: 'noreferrer' } : { target: '_top' })}

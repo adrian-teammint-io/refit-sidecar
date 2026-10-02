@@ -64,6 +64,13 @@ export function App() {
     push({ kind: 'project', project: full })
   }
   const openFailed = (c: { connectionId: string; name: string }) => push({ kind: 'failed', conn: { id: c.connectionId, name: c.name.trim() } })
+  // Search by id: names repeat (many connections are called TEST), the id matches exactly one row. Status resets to
+  // All so a paused project isn't filtered out.
+  const find = (view: 'projects' | 'connections', q: string) => {
+    if (view === 'projects') queries.projects[1]({ ...queries.projects[0], q, status: 'all' })
+    else queries.connections[1]({ q })
+    push({ kind: view })
+  }
   const pin = (p: Project) => chrome.storage.local.set({ [envKey(ENV, 'pins')]: togglePin(pins ?? {}, p, Date.now()) })
 
   useEffect(() => {
@@ -99,7 +106,7 @@ export function App() {
 
   const ctx: Ctx = {
     store, common: { run, now, ready, exec, cancel }, dark, saveSettings: s => saveSettings(settings, s), queries,
-    push, replace: v => setStack(s => [...s.slice(0, -1), v]), openProject, openFailed, pin,
+    push, replace: v => setStack(s => [...s.slice(0, -1), v]), openProject, openFailed, find, pin,
   }
   const def = defOf(view)
   const body = !loaded ? null : hostProblem(host) && !def.noHost ? <HostSetup host={host} /> : def.render(view, ctx)

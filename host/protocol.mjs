@@ -77,18 +77,18 @@ export const PARAMS = {
     return `convert_from(decode('${v}', 'hex'), 'UTF8')`
   },
   project_status: ENUM('ACTIVE', 'PAUSED', 'NEED_PAYMENT'), // project_status values
-  plan: ENUM('BASIC', 'DEMO', 'ENTERPRISE', 'TRIAL'), // project_plan values
+  plan: ENUM('BASIC', 'DEMO', 'ENTERPRISE'), // project_plan values the drawer creates (no TRIAL)
   end_date: v => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v) throw new Error('must be a real YYYY-MM-DD date')
     return `'${v}'::date`
   },
-  // extra members as "uuid:role,uuid:role" (0-50), emitted as a VALUES list (or an empty row set)
+  // extra members as "uuid:role,uuid:role" (0-50), emitted as more rows of create-project's VALUES list
   members: v => {
-    if (v === '') return '(SELECT NULL::uuid, NULL::text WHERE false)'
+    if (v === '') return ''
     const ms = v.split(',').map(m => m.split(':'))
     if (ms.length > 50 || !ms.every(([id, role, x]) => UUID.test(id ?? '') && ['admin', 'editor', 'viewer'].includes(role) && x === undefined))
       throw new Error('must be 0-50 comma-separated uuid:role pairs')
-    return `(VALUES ${ms.map(([id, role]) => `('${id.toLowerCase()}'::uuid, '${role}')`).join(', ')})`
+    return ms.map(([id, role]) => `, ('${id.toLowerCase()}'::uuid, '${role}')`).join('')
   },
   // search text: hex of the UTF-8 text, decoded by Postgres. SQL matches it with strpos(lower(col), lower(:q)) > 0,
   // a plain substring test with no LIKE wildcards to escape. (Escaping with replace() is out: Tabularis's read-only
@@ -114,14 +114,14 @@ const U = "'[0-9a-f-]{36}'"
 const ROLE = "'(?:admin|editor|viewer)'"
 // Exact statement for create-project.sql (whitespace collapsed), with each placeholder standing for the only forms
 // its binder can emit. Kept here, apart from the .sql file, so editing the file can't widen what's allowed.
-const CREATE_PROJECT = "WITH p AS ( INSERT INTO project (name, create_by, status, plan, end_date) VALUES (:name, :user_id, :project_status, :plan, :end_date) RETURNING id ), m AS ( INSERT INTO refit_user_project_relation (user_id, project_id, role) SELECT x.user_id, p.id, x.role FROM p, (SELECT :user_id::uuid AS user_id, 'admin'::text AS role UNION ALL SELECT * FROM :members AS v(user_id, role)) x ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id ), t AS ( UPDATE refit_user SET had_trial = true WHERE id = :user_id AND :plan = 'TRIAL' RETURNING id ) SELECT p.id, (SELECT count(*) FROM m) AS members FROM p"
+const CREATE_PROJECT = "WITH p AS ( INSERT INTO project (name, create_by, status, plan, end_date) VALUES (:name, :user_id, :project_status, :plan, :end_date) RETURNING id ) INSERT INTO refit_user_project_relation (user_id, project_id, role) SELECT u.user_id, p.id, u.role FROM p, (VALUES (:user_id::uuid, 'admin'::text):members ) AS u (user_id, role) ON CONFLICT (user_id, project_id) DO NOTHING RETURNING project_id, user_id"
 const SHAPES = {
   name: "convert_from\\(decode\\('(?:[0-9a-f]{2})+', 'hex'\\), 'UTF8'\\)",
   user_id: U,
   project_status: "'(?:ACTIVE|PAUSED|NEED_PAYMENT)'",
-  plan: "'(?:BASIC|DEMO|ENTERPRISE|TRIAL)'",
+  plan: "'(?:BASIC|DEMO|ENTERPRISE)'",
   end_date: "'\\d{4}-\\d{2}-\\d{2}'::date",
-  members: `(?:\\(VALUES \\(${U}::uuid, ${ROLE}\\)(?:, \\(${U}::uuid, ${ROLE}\\))*\\)|\\(SELECT NULL::uuid, NULL::text WHERE false\\))`,
+  members: `(?:, \\(${U}::uuid, ${ROLE}\\))*`,
 }
 const shape = sql => new RegExp('^' + sql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/(?<![:\w]):(\w+)\b/g, (m, k) => SHAPES[k] ?? m) + '$', 'i')
 export const WRITES = {

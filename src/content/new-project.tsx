@@ -125,7 +125,6 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
       <section className="field">
         <p className="eyebrow">Plan</p>
         <Segmented label="Plan" value={plan} options={PLAN_OPTIONS} onChange={setPlan} />
-        {plan === 'TRIAL' && <p className="hint muted">TRIAL also marks the owner as having had a trial (refit_user.had_trial), as Refit does.</p>}
       </section>
 
       <section className="field">

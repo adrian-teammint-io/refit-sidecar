@@ -73,15 +73,17 @@ assert.throws(() => checkQuery('sql/delete-syncs.sql', `${del}; DELETE FROM proj
 assert.throws(() => checkQuery('sql/projects.sql', 'SELECT 1; DROP TABLE x'), /single statement/)
 // create-project: the real file, bound, is exactly its approved shape; bad values never reach SQL
 const cp = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/create-project.sql'), 'utf8'))
-const cpOk = { name: toHex("Brand KR '26"), user_id: P, project_status: 'ACTIVE', plan: 'TRIAL', end_date: '2026-11-01', members: `${Q}:viewer,${P}:admin` }
+const cpOk = { name: toHex("Brand KR '26"), user_id: P, project_status: 'ACTIVE', plan: 'ENTERPRISE', end_date: '2026-11-01', members: `${Q}:viewer,${P}:admin` }
 assert.equal(checkQuery('sql/create-project.sql', bindParams(cp, cpOk)), true)
 assert.equal(checkQuery('sql/create-project.sql', bindParams(cp, { ...cpOk, members: '' })), true)
 assert.throws(() => bindParams(cp, { ...cpOk, name: toHex('   ') }), /name must not be blank/)
 assert.throws(() => bindParams(cp, { ...cpOk, end_date: '2026-02-30' }), /real YYYY-MM-DD/)
 assert.throws(() => bindParams(cp, { ...cpOk, plan: 'FREE' }), /plan must be one of/)
+assert.throws(() => bindParams(cp, { ...cpOk, plan: 'TRIAL' }), /plan must be one of/)
 assert.throws(() => bindParams(cp, { ...cpOk, members: `${Q}:owner` }), /uuid:role/)
 assert.throws(() => bindParams(cp, { ...cpOk, members: `${Q}:admin:x` }), /uuid:role/)
-assert.throws(() => checkQuery('sql/create-project.sql', bindParams(cp, cpOk).replace("'TRIAL'", "'TRIAL' OR true")), /approved/)
+assert.throws(() => checkQuery('sql/create-project.sql', bindParams(cp, cpOk).replace("'ENTERPRISE'", "'ENTERPRISE' OR true")), /approved/)
+assert.throws(() => checkQuery('sql/create-project.sql', bindParams(cp, cpOk).replace("'admin')", "'admin'), ((SELECT id FROM refit_user LIMIT 1), 'admin')")), /approved/)
 assert.throws(() => checkQuery('sql/projects.sql', bindParams(cp, cpOk)), /only a single SELECT/)
 assert.deepEqual(Object.keys(CONNECTIONS), ['prod', 'stag'])
 for (const [name, spec] of Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, 'commands.json'), 'utf8')).commands)) {

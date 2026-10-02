@@ -303,7 +303,7 @@
           "default": "PAUSED"
         },
         "plan": {
-          "pattern": "BASIC|DEMO|ENTERPRISE|TRIAL",
+          "pattern": "BASIC|DEMO|ENTERPRISE",
           "default": "BASIC"
         },
         "end": {

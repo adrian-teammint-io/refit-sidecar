@@ -211,7 +211,10 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
   if (run.command === 'create-project') {
     if (run.exit !== 0 || run.error) return
     try {
-      const [id, members] = ((JSON.parse(stdout) as { rows?: unknown[][] }).rows ?? [])[0] ?? []
+      // One row (project_id, user_id) per member added; the owner always is, so no row means nothing was created.
+      const rows = (JSON.parse(stdout) as { rows?: unknown[][] }).rows ?? []
+      const [id] = rows[0] ?? []
+      const members = rows.length
       if (typeof id !== 'string') return { summary: 'Create finished; no project id came back. Check the pnpm server terminal.' }
       const name = fromHex(run.args?.name ?? '')
       return { summary: `Created ${name} with ${members} member${members === 1 ? '' : 's'}`, result: { projectId: id, name } }

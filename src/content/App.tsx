@@ -153,9 +153,10 @@ export function App() {
         <div className="resize" {...resize.handle} />
         <header className="head">
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
-          {/* Breadcrumbs: every view under the current one; clicking one pops back to it. */}
+          {/* Breadcrumbs: every view under the current one; clicking one pops back to it. One level up (Home › X) is
+              just Back, so crumbs show from two levels deep. */}
           <nav className="crumbs" aria-label="Breadcrumb">
-            {stack.slice(0, -1).map((v, i) => (
+            {stack.length > 2 && stack.slice(0, -1).map((v, i) => (
               <span key={i} className="crumb">
                 <button onClick={() => setStack(s => s.slice(0, i + 1))} title={titleOf(v, i)}>{titleOf(v, i)}</button>
                 <Icon d="chevron" size={12} />

@@ -81,7 +81,7 @@ export function FailedView({ fs: failed, other, conn: focus, find, run, now, rea
         : <>
             <div className="results" data-stale={mine}>
               <SyncList rows={rows} now={now} status={status} selecting={selecting} selected={sel.picked} onToggle={sel.toggle}
-                findConnection={r => find('connections', r.connectionId)} findProject={r => find('projects', r.projectId)} />
+                findConnection={r => find('connections', r.name.trim())} findProject={r => find('projects', r.project)} />
             </div>
             {fs.truncated && <p className="hint muted center">Showing the newest {n}. Older ones were cut by the query limit.</p>}
           </>}

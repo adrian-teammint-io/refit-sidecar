@@ -64,12 +64,12 @@ export function App() {
     push({ kind: 'project', project: full })
   }
   const openFailed = (c: { connectionId: string; name: string }) => push({ kind: 'failed', conn: { id: c.connectionId, name: c.name.trim() } })
-  // Search by id: names repeat (many connections are called TEST), the id matches exactly one row. Status resets to
+  // Jumps to Home › Projects (or Connections) with q typed into its search, as if opened from Home. Status resets to
   // All so a paused project isn't filtered out.
   const find = (view: 'projects' | 'connections', q: string) => {
     if (view === 'projects') queries.projects[1]({ ...queries.projects[0], q, status: 'all' })
     else queries.connections[1]({ q })
-    push({ kind: view })
+    setStack([{ kind: 'home' }, { kind: view }])
   }
   const pin = (p: Project) => chrome.storage.local.set({ [envKey(ENV, 'pins')]: togglePin(pins ?? {}, p, Date.now()) })
 

@@ -53,6 +53,9 @@ export function ago(t: number, now: number) {
 export type RunInfo = { startedAt: number; endedAt?: number; exit?: number; signal?: string; error?: string }
 export type Tone = 'run' | 'ok' | 'fail'
 
+// Finished clean: exit 0, no host error. (A cancelled run has a signal and no exit code.)
+export const runOk = (r: RunInfo) => r.exit === 0 && !r.error
+
 // Status pill text for a run: "running · 3.2s", "exit 0 · 1.0s", "cancelled · 4.1s", or the host error.
 export function runStatus(r: RunInfo, now: number): { tone: Tone; label: string } {
   const took = duration((r.endedAt ?? now) - r.startedAt)

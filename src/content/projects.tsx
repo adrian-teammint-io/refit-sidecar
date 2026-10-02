@@ -2,7 +2,8 @@
 // also a fitting room's list (fitting.tsx).
 import { useState } from 'react'
 import { ago, plural } from '../term'
-import { projectUrl, type FailedSyncs } from '../failed-syncs'
+import type { FailedSyncs } from '../failed-syncs'
+import { projectUrl } from '../links'
 import {
   pinnedFor, type Project, type ProjectRef, type Pins, type Projects, type ProjectConnection, type ProjectConnections, type ProjectsQuery,
   type ConnectionsQuery, type ProjectMembers, type UserSearch, type Page,
@@ -11,7 +12,8 @@ import type { Args, Command } from '../api'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { MembersPanel } from './members'
-import { Browse, Empty, SearchBox, useBrowse, type Common, type OpenFailed } from './browse'
+import { OpenInRefit } from '../shared/card'
+import { Browse, Empty, SearchBox, pageCount, useBrowse, type Common, type OpenFailed } from './browse'
 import { ConnectionList, SelectToggle } from './connections'
 
 const STATUSES = [['all', 'All'], ['ACTIVE', 'Active'], ['PAUSED', 'Paused']] as const
@@ -53,7 +55,7 @@ export function ProjectsView({ projects, pins, query, setQuery, openProject, pin
   return (
     <div className="pane">
       <Browse page={projects} b={b} run={c.run} now={c.now} command="projects" cancel={c.cancel}
-        meta={projects?.at ? `${projects.rows.length}${projects.hasMore ? '+' : ''} projects · updated ${ago(projects.at, c.now)}` : ''}
+        meta={projects?.at ? `${pageCount(projects, 'projects')} · updated ${ago(projects.at, c.now)}` : ''}
         empty={<Empty icon="search" title="No matching projects" text="Try other words, or another status." />}
         rowsFor={rows => <>
           {!!pinned.length && <><p className="eyebrow">Pinned</p><ul className="proj-list">{pinned.map(row)}</ul><p className="eyebrow">All projects</p></>}
@@ -78,7 +80,6 @@ export function ProjectView({ project, cache, members, userSearch, pinned, pin, 
   pinned: boolean; pin: (p: Project) => void; openProject: (p: ProjectRef) => void; openFailed: OpenFailed
 } & Common) {
   const [tab, setTab] = useState<'connections' | 'members'>('connections')
-  const url = projectUrl(project.id)
   const full = project.status !== undefined
   // Same source as the cards: a complete FAIL list from Sync requests beats the cached project row's count.
   const failed = fs && !fs.error && !fs.truncated ? fs.rows.filter(r => r.projectId === project.id).length : project.failed
@@ -90,7 +91,7 @@ export function ProjectView({ project, cache, members, userSearch, pinned, pin, 
           {full && <p className="status-counts"><span>{project.connections} connections</span>{!!failed && <span data-tone="fail">{failed} FAIL</span>}</p>}
         </div>
         {full && <button className="icon-btn pin" aria-pressed={pinned} aria-label={pinned ? 'Unpin project' : 'Pin project'} title={pinned ? 'Unpin' : 'Pin to top'} onClick={() => pin(project as Project)}><Icon d="pin" /></button>}
-        {url && <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a>}
+        <OpenInRefit url={projectUrl(project.id)} />
       </div>
       <Segmented label="Project section" value={tab} options={PROJECT_TABS} onChange={setTab} />
       {tab === 'members'
@@ -113,7 +114,7 @@ export function ConnectionsPanel({ page, command, extra, none, openFailed, fs, .
     <>
       <Browse page={page} b={b} run={c.run} now={c.now} command={command} extra={extra} cancel={c.cancel}
         tools={<SelectToggle selecting={selecting} setSelecting={setSelecting} rows={page?.rows} />}
-        meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
+        meta={page?.at ? `${pageCount(page, 'connections')} · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : none} />}
         rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name or platform" />

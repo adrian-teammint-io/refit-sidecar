@@ -2,11 +2,12 @@
 import { useEffect, useState } from 'react'
 import { call, MAX_TABS } from '../api'
 import { ago } from '../term'
-import { dateRange, platform, connectionUrl, liveFails, type FailedSyncs } from '../failed-syncs'
+import { dateRange, platform, liveFails, type FailedSyncs } from '../failed-syncs'
+import { connectionUrl } from '../links'
 import type { ProjectConnection, ConnectionHit, Connections, ProjectRef } from '../projects'
 import { Icon } from '../shared/icons'
-import { CardHead, pickOnClick, stagger } from '../shared/card'
-import { Browse, Empty, SearchBox, useBrowse, type Common, type OpenFailed } from './browse'
+import { CardHead, ProjectLink, pickOnClick, stagger } from '../shared/card'
+import { Browse, Empty, SearchBox, pageCount, useBrowse, type Common, type OpenFailed } from './browse'
 import { SelectionRow, useSelection } from './ui'
 
 const TONE: Record<string, string> = { SUCCESS: 'ok', FAIL: 'fail' }
@@ -56,7 +57,7 @@ export function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs
                 <span className="pill" data-tone={c.status ? TONE[c.status] ?? 'none' : 'none'}>{c.status ?? 'never synced'}</span>
               </CardHead>
               {c.project && openProject && (
-                <button className="link-btn" onClick={() => openProject({ id: c.projectId, name: c.project! })}><Icon d="folder" size={12} />{c.project}</button>
+                <ProjectLink name={c.project} onClick={() => openProject({ id: c.projectId, name: c.project! })} />
               )}
               <p className="sync-meta muted">
                 {c.syncType && <><span className="mono">{c.syncType}</span> · </>}
@@ -96,7 +97,7 @@ export function ConnectionsView({ page, query, setQuery, openProject, openFailed
   return (
     <div className="pane">
       <Browse page={page} b={b} run={c.run} now={c.now} command="connections" cancel={c.cancel}
-        meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections${page.query.q ? ` matching "${page.query.q}"` : ''}` : ''}
+        meta={page?.at ? `${pageCount(page, 'connections')}${page.query.q ? ` matching "${page.query.q}"` : ''}` : ''}
         empty={<Empty icon="search" title="No matching connections" text="Search matches connection name, platform (META, TIKTOK…) or id." />}
         tools={<SelectToggle selecting={selecting} setSelecting={setSelecting} rows={page?.rows} />}
         rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>

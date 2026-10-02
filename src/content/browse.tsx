@@ -2,7 +2,7 @@
 // and the status / error / empty / loading states every list shares.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Args, Command, Run } from '../api'
-import { runStatus } from '../term'
+import { runOk, runStatus } from '../term'
 import { BATCH, cleanQuery, sameQuery, toArgs, type Page } from '../projects'
 import { isRunning } from '../shared/store'
 import { ENV } from '../table'
@@ -13,6 +13,9 @@ export type Exec = (command: Command, args?: Args) => void
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
 export type OpenFailed = (c: { connectionId: string; name: string }) => void // opens Sync requests for one connection
 const MAX_AGE = 30_000 // ms; ponytail: age only, a delete elsewhere within 30s still shows the old counts until refresh
+
+// A status line's count: "30+ projects" while more batches exist, "12 projects" once all are loaded.
+export const pageCount = (page: Page<unknown, object>, noun: string) => `${page.rows.length}${page.hasMore ? '+' : ''} ${noun}`
 
 export function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value)
@@ -30,7 +33,7 @@ export function commandState(run: Run | undefined, command: Command, extra: Args
   const matches = runMatches(run, command, extra)
   const running = isRunning(run)
   const last = !running && matches ? run : undefined
-  return { mine: running && matches, busy: running && !matches ? run!.command : undefined, last, ok: !!last && last.exit === 0 && !last.error }
+  return { mine: running && matches, busy: running && !matches ? run!.command : undefined, last, ok: !!last && runOk(last) }
 }
 
 // Fetches the first batch whenever the (debounced) query differs from the stored page's, and exposes "load more".

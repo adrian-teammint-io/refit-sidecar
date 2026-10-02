@@ -1,7 +1,6 @@
-// Parser for the `failed-syncs` command (host/sql/failed-syncs.sql), plus link/label helpers the project views reuse.
+// Parser for the `failed-syncs` command (host/sql/failed-syncs.sql), plus label helpers the project views reuse.
 // Pure, so plain node can test it against a captured sample.
-import { parseTable, UUID, APP } from './table.ts'
-export { APP } from './table.ts'
+import { parseTable } from './table.ts'
 
 export type FailedSync = {
   id: string
@@ -44,25 +43,6 @@ export function parseFailedSyncs(stdout: string): { rows: FailedSync[]; truncate
   return { rows: r.rows as FailedSync[], truncated: r.truncated }
 }
 
-// refit-app-2 route: /_auth/$projectId/datasources/{service|file}/$datasourceId (datasourceId = connection.id).
-// Ids come from the DB, but a URL is still only built from values that look like UUIDs.
-export function connectionUrl(r: Pick<FailedSync, 'projectId' | 'connectionId' | 'kind'>): string | undefined {
-  const kind = r.kind === 'SERVICE' ? 'service' : r.kind === 'FILE' ? 'file' : undefined
-  if (!kind || !UUID.test(r.projectId) || !UUID.test(r.connectionId)) return undefined
-  return `${APP}/${r.projectId}/datasources/${kind}/${r.connectionId}`
-}
-
-export const projectUrl = (projectId: string) => (UUID.test(projectId) ? `${APP}/${projectId}` : undefined)
-
-// refit-app-2 route: /_auth/$projectId/fitting/$fittingRoomId
-export const fittingRoomUrl = (r: { projectId: string; id: string }) =>
-  UUID.test(r.projectId) && UUID.test(r.id) ? `${APP}/${r.projectId}/fitting/${r.id}` : undefined
-// One node of it (refit-app-2 route /_auth/$projectId/fitting/$fittingRoomId/$transactionId).
-export const fittingNodeUrl = (r: { projectId: string; id: string }, nodeId: string) => {
-  const room = fittingRoomUrl(r)
-  return room && UUID.test(nodeId) ? `${room}/${nodeId}` : undefined
-}
-
 // What a connection card shows about failures, kept in step with the Sync requests FAIL list: when that list is newer
 // than the card's page (a refetch, or a delete dropping rows), its rows win. Otherwise the page's own values, with the
 // reason only while the newest sync is FAIL (a resolved row can keep its old reason text).
@@ -80,7 +60,7 @@ export function liveFails(
   return { failed: c.failed, reason: c.status === 'FAIL' ? c.displayReason ?? c.reason : null }
 }
 
-export const platform =(r: Pick<FailedSync, 'service' | 'kind'>) => r.service ?? r.kind
+export const platform = (r: Pick<FailedSync, 'service' | 'kind'>) => r.service ?? r.kind
 
 // "2026-08-31 → 2026-09-30", or a single date when start == end.
 export function dateRange(r: Pick<FailedSync, 'start' | 'end'>) {

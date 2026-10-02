@@ -4,7 +4,7 @@ import {
   parseProjects, parseMembers, parseProjectConnections, parseConnections, parseFittingRooms, toHex, fromHex, cleanQuery, toArgs, queryOf,
   mergePage, cacheProject, togglePin, refreshPins, pinnedFor, dropStalePages, BATCH, MAX_CACHED_PROJECTS, type Project, type ProjectsQuery,
 } from './projects.ts'
-import { connectionUrl, projectUrl, fittingRoomUrl } from './failed-syncs.ts'
+import { connectionUrl, projectUrl, fittingRoomUrl } from './links.ts'
 
 const sample = (f: string) => readFileSync(new URL(`./samples/${f}`, import.meta.url), 'utf8')
 

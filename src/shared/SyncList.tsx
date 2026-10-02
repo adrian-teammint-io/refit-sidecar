@@ -1,7 +1,8 @@
 // Parsed failed sync_requests as cards. The drawer shows all of them; the popup passes `limit`.
 // With `selecting` (the drawer's Failed syncs select mode), a check appears and clicking a card toggles it.
 import { useState } from 'react'
-import { connectionUrl, dateRange, platform, type FailedSync, type SyncStatus } from '../failed-syncs'
+import { dateRange, platform, type FailedSync, type SyncStatus } from '../failed-syncs'
+import { connectionUrl } from '../links'
 import { ago } from '../term'
 import { Icon } from './icons'
 import { CardHead, pickOnClick, stagger } from './card'

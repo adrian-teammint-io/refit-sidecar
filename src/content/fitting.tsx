@@ -2,13 +2,13 @@
 // connections it reads.
 import { useState } from 'react'
 import { ago, plural } from '../term'
-import { fittingRoomUrl, type FailedSyncs } from '../failed-syncs'
+import type { FailedSyncs } from '../failed-syncs'
+import { fittingRoomUrl } from '../links'
 import type { FittingRoom, FittingRoomConnections, FittingRooms, ProjectRef } from '../projects'
 import type { Flow } from '../flow'
-import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { CardHead, pickOnClick, stagger } from '../shared/card'
-import { Browse, Empty, SearchBox, useBrowse, type Common, type OpenFailed } from './browse'
+import { CardHead, OpenInRefit, ProjectLink, pickOnClick, stagger } from '../shared/card'
+import { Browse, Empty, SearchBox, pageCount, useBrowse, type Common, type OpenFailed } from './browse'
 import { ConnectionsPanel } from './projects'
 import { FlowPanel } from './flow'
 
@@ -21,7 +21,7 @@ export function FittingRoomsView({ page, query, setQuery, openProject, openRoom,
   return (
     <div className="pane">
       <Browse page={page} b={b} run={c.run} now={c.now} command="fitting-rooms" cancel={c.cancel}
-        meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} fitting rooms · newest edit first` : ''}
+        meta={page?.at ? `${pageCount(page, 'fitting rooms')} · newest edit first` : ''}
         empty={<Empty icon="search" title="No matching fitting rooms" text="Search matches fitting room name, project name or id." />}
         rowsFor={rows => (
           <ul className="syncs">
@@ -34,7 +34,7 @@ export function FittingRoomsView({ page, query, setQuery, openProject, openRoom,
                     link={url ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open fitting room' } : undefined}>
                     {r.notOk > 0 && <span className="pill" data-tone="fail" title="fitdata syncs not in SUCCESS">{r.notOk} not ok</span>}
                   </CardHead>
-                  <button className="link-btn" onClick={() => openProject({ id: r.projectId, name: r.project })}><Icon d="folder" size={12} />{r.project}{r.projectStatus === 'PAUSED' && ' · paused'}</button>
+                  <ProjectLink name={r.project} onClick={() => openProject({ id: r.projectId, name: r.project })}>{r.projectStatus === 'PAUSED' && ' · paused'}</ProjectLink>
                   <p className="sync-meta muted">
                     edited {ago(Date.parse(r.updatedAt), c.now)} · {plural(r.outputs, 'output')}
                     {r.lastFit && <> · last fitdata {ago(Date.parse(r.lastFit), c.now)}</>}
@@ -55,16 +55,15 @@ export function FittingRoomsView({ page, query, setQuery, openProject, openRoom,
 export function FittingRoomView({ room, cache, flow, openProject, openFailed, fs, ...c }: {
   room: FittingRoom; cache?: FittingRoomConnections; flow?: Flow; openProject: (p: ProjectRef) => void; openFailed: OpenFailed; fs?: FailedSyncs
 } & Common) {
-  const url = fittingRoomUrl(room)
   const [tab, setTab] = useState<'flow' | 'connections'>('flow')
   return (
     <div className="pane">
       <div className="proj-head">
         <div>
           <p className="muted mono">{[plural(room.nodes, 'node'), plural(room.outputs, 'output'), room.id.slice(0, 8)].join(' · ')}</p>
-          <button className="link-btn" onClick={() => openProject({ id: room.projectId, name: room.project })}><Icon d="folder" size={12} />{room.project}</button>
+          <ProjectLink name={room.project} onClick={() => openProject({ id: room.projectId, name: room.project })} />
         </div>
-        {url && <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a>}
+        <OpenInRefit url={fittingRoomUrl(room)} />
       </div>
       <Segmented label="Fitting room section" value={tab} options={ROOM_TABS} onChange={setTab} />
       {tab === 'flow'

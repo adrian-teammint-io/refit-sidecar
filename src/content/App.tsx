@@ -2,7 +2,7 @@ import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { actionFor, keyLabel, keysOf } from '../keybinds'
-import { plural, runStatus } from '../term'
+import { plural, runOk, runStatus } from '../term'
 import { togglePin, type Project, type ProjectRef, type ProjectsQuery } from '../projects'
 import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
@@ -69,7 +69,7 @@ export function App() {
   useEffect(() => {
     if (!run?.endedAt || run.id !== startedHere.current) return
     startedHere.current = undefined
-    if (run.exit !== 0 || run.error) return flash(run.tail ?? runStatus(run, Date.now()).label)
+    if (!runOk(run)) return flash(run.tail ?? runStatus(run, Date.now()).label)
     if (run.summary) flash(run.summary)
     else if (run.command === 'failed-syncs') {
       const status = run.args?.sync_status

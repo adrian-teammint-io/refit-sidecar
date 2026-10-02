@@ -32,6 +32,15 @@ export function CardHead({ badge, title, check, link, children }: {
   )
 }
 
+// A card's project name: opens that project's view.
+export const ProjectLink = ({ name, onClick, children }: { name: string; onClick: () => void; children?: ReactNode }) => (
+  <button className="link-btn" onClick={onClick}><Icon d="folder" size={12} />{name}{children}</button>
+)
+
+// The primary "Open in Refit" button in a view's header (project, fitting room). Nothing when the id isn't a UUID.
+export const OpenInRefit = ({ url }: { url?: string }) =>
+  url ? <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a> : null
+
 // Avatar, email and name (or `sub`): the inside of every user row (members, user search hits, picked user).
 export function UserLabel({ u, sub }: { u: { email: string; name: string | null }; sub?: ReactNode }) {
   return <>

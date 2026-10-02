@@ -1,15 +1,15 @@
 // Worker side of the native host: owns the one connectNative port (to the relay, host/host.mjs, which forwards to
 // `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
 // They read `host` / `output` (storage.session) and `run` plus each command's result key (storage.local).
-import { parseFlow, type Flow, type FittingRoomFlows } from './flow'
+import { parseFlow, type Flow } from './flow'
 import type { Args, Command, HostState, Output, Run } from './api'
-import { flushCarry, plural, pushLines, splitChunk, type Line } from './term'
-import { parseFailedSyncs, type FailedSyncs, type SyncRequests } from './failed-syncs'
+import { flushCarry, plural, pushLines, runOk, splitChunk, type Line } from './term'
+import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
 import { DATA_KEYS, envKey } from './table'
+import type { Data } from './shared/store'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, parseMembers, parseUserHits, fromHex, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
-  type Members, type ProjectMembers, type UserSearch,
-  type Projects, type ProjectConnections, type Connections, type FittingRooms, type FittingRoomConnections, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
+  type Members, type UserSearch, type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
 } from './projects'
 
 export const HOST = 'com.hoan.refit_sidecar' // keep in sync with NAME in host/install.mjs
@@ -156,39 +156,71 @@ async function finish(end: Pick<Run, 'exit' | 'signal' | 'error'>) {
 
 // Fresh rows on success; otherwise the last good rows stay on screen, flagged with what went wrong.
 function outcome<T extends { error?: string }>(prev: T | undefined, empty: T, run: Run, parse: () => T): T {
-  if (run.exit === 0 && !run.error) {
+  if (runOk(run)) {
     try { return parse() } catch (e) { return { ...(prev ?? empty), error: `Could not read output: ${(e as Error).message}` } }
   }
   return { ...(prev ?? empty), error: run.error ?? (run.signal ? 'Cancelled' : `Command failed (exit ${run.exit})${run.tail ? `: ${run.tail}` : ''}`) }
 }
 
+type Result = { summary?: string; result?: Args; then?: { command: Command; args: Args } }
+type Save = (o: Data) => Promise<void>
+
 // Writes the run's result under its environment's keys (envKey). May return a one-line summary for the run and a
 // follow-up request (after a delete it can't account for row by row: fetch the failed list again).
-async function storeResult(run: Run, stdout: string): Promise<{ summary?: string; result?: Args; then?: { command: Command; args: Args } } | void> {
-  const at = Date.now()
-  const offset = Number(run.args?.offset ?? 0)
+async function storeResult(run: Run, stdout: string): Promise<Result | void> {
   const env = run.args?.env
   const got = await chrome.storage.local.get(DATA_KEYS.map(k => envKey(env, k)))
-  const s = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]]))) as {
-    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; fittingRoomConnections?: FittingRoomConnections; fittingRoomFlows?: FittingRoomFlows; pins?: Pins; projectMembers?: ProjectMembers
-    syncRequests?: SyncRequests
-  }
-  const save = (o: Record<string, unknown>) => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
+  const s: Data = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]])))
+  const save: Save = o => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
+  return WRITES.includes(run.command) ? writeResult(run, stdout, s, save) : readResult(run, stdout, s, save)
+}
+
+// A write's JSON reply: its RETURNING rows (and affected_rows). Throws when the output isn't JSON.
+const writeRows = (stdout: string) => JSON.parse(stdout) as { rows?: unknown[][]; affected_rows?: number }
+
+// A write stores nothing of its own (only a delete drops its rows from the FAIL list); it reports what it did as the
+// run's summary. A failed write is already told by its run status.
+async function writeResult(run: Run, stdout: string, s: Data, save: Save): Promise<Result | void> {
+  if (!runOk(run)) return
+  const env = run.args?.env ?? 'prod'
   if (run.command === 'delete-syncs') {
-    if (run.exit !== 0 || run.error) return
+    const refetch = { command: 'failed-syncs' as Command, args: { env } }
     const asked = (run.args?.ids ?? '').toLowerCase().split(',')
     let gone: string[] = [], affected = 0
     try {
-      const t = JSON.parse(stdout) as { rows?: unknown[][]; affected_rows?: number }
+      const t = writeRows(stdout)
       gone = (t.rows ?? []).map(r => String(r[0]).toLowerCase())
       affected = gone.length || (t.affected_rows ?? 0)
-    } catch { return { summary: 'Delete finished; could not read the result', then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } } }
+    } catch { return { summary: 'Delete finished; could not read the result', then: refetch } }
     const summary = `Deleted ${affected} of ${plural(asked.length, 'sync request')}`
     // RETURNING id lists exactly what went; drop those rows. Without it, re-fetch rather than guess.
-    if (!gone.length) return { summary, then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } }
+    if (!gone.length) return { summary, then: refetch }
     if (s.failedSyncs) await save({ failedSyncs: { ...s.failedSyncs, rows: s.failedSyncs.rows.filter(r => !gone.includes(r.id.toLowerCase())) } })
     return { summary }
   }
+  if (run.command === 'add-project-user') {
+    const reload = { command: 'project-members' as Command, args: { env, project: run.args?.project ?? '' } }
+    let added = 0
+    try { added = writeRows(stdout).rows?.length ?? 0 } catch { return { summary: 'Add finished; could not read the result', then: reload } }
+    // ON CONFLICT DO NOTHING: no row back means they were already a member and nothing changed.
+    return { summary: added ? `Added as ${run.args?.role ?? 'viewer'}` : 'Already a member; nothing changed', then: reload }
+  }
+  if (run.command === 'create-project') {
+    try {
+      // One row (project_id, user_id) per member added; the owner always is, so no row means nothing was created.
+      const rows = writeRows(stdout).rows ?? []
+      const [id] = rows[0] ?? []
+      if (typeof id !== 'string') return { summary: 'Create finished; no project id came back. Check the pnpm server terminal.' }
+      const name = fromHex(run.args?.name ?? '')
+      return { summary: `Created ${name} with ${plural(rows.length, 'member')}`, result: { projectId: id, name } }
+    } catch { return { summary: 'Create finished; could not read the result. Check the pnpm server terminal.' } }
+  }
+}
+
+// A read stores fresh rows, or keeps the last good ones flagged with the error (outcome).
+async function readResult(run: Run, stdout: string, s: Data, save: Save): Promise<void> {
+  const at = Date.now()
+  const offset = Number(run.args?.offset ?? 0)
   if (run.command === 'project-members' && run.args?.project) {
     const id = run.args.project
     const cache = s.projectMembers ?? {}
@@ -197,29 +229,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
   }
   if (run.command === 'user-search') {
     const base = { at, runId: run.id, project: run.args?.project ?? '', q: fromHex(run.args?.q ?? '') }
-    const next = outcome<UserSearch>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseUserHits(stdout) }))
-    return save({ userSearch: next })
-  }
-  if (run.command === 'add-project-user') {
-    const project = run.args?.project ?? ''
-    const reload = { command: 'project-members' as Command, args: { env: env ?? 'prod', project } }
-    if (run.exit !== 0 || run.error) return
-    let added = 0
-    try { added = (JSON.parse(stdout) as { rows?: unknown[] }).rows?.length ?? 0 } catch { return { summary: 'Add finished; could not read the result', then: reload } }
-    // ON CONFLICT DO NOTHING: no row back means they were already a member and nothing changed.
-    return { summary: added ? `Added as ${run.args?.role ?? 'viewer'}` : 'Already a member; nothing changed', then: reload }
-  }
-  if (run.command === 'create-project') {
-    if (run.exit !== 0 || run.error) return
-    try {
-      // One row (project_id, user_id) per member added; the owner always is, so no row means nothing was created.
-      const rows = (JSON.parse(stdout) as { rows?: unknown[][] }).rows ?? []
-      const [id] = rows[0] ?? []
-      const members = rows.length
-      if (typeof id !== 'string') return { summary: 'Create finished; no project id came back. Check the pnpm server terminal.' }
-      const name = fromHex(run.args?.name ?? '')
-      return { summary: `Created ${name} with ${plural(members, 'member')}`, result: { projectId: id, name } }
-    } catch { return { summary: 'Create finished; could not read the result. Check the pnpm server terminal.' } }
+    return save({ userSearch: outcome<UserSearch>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseUserHits(stdout) })) })
   }
   if (run.command === 'failed-syncs') {
     const status = run.args?.sync_status ?? 'FAIL'
@@ -228,43 +238,37 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
     if (status !== 'IN_PROGRESS' && status !== 'FRAGMENTED') return
     return save({ syncRequests: { ...s.syncRequests, [status]: fresh(s.syncRequests?.[status]) } })
   }
-  // Browse commands: a page per query; "load more" runs append to it (mergePage).
-  const empty = <Q>(query: Q) => ({ at, runId: run.id, query, rows: [], hasMore: false })
-  if (run.command === 'projects') {
-    const query = queryOf<ProjectsQuery>(run.args, ['q', 'status', 'sort'])
-    const next = outcome<Projects>(s.projects, empty(query), run, () => mergePage(s.projects, query, offset, parseProjects(stdout), at, run.id, p => p.id))
-    const pins = s.pins && refreshPins(s.pins, next.rows)
-    return save(pins ? { projects: next, pins } as Record<string, unknown> : { projects: next })
-  }
-  if (run.command === 'project-connections' && run.args?.project) {
-    const id = run.args.project
-    const cache = s.projectConnections ?? {}
-    const query = queryOf<ConnectionsQuery>(run.args, ['q', 'sort'])
-    const next = outcome<ProjectConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
-    return save({ projectConnections: cacheProject(cache, id, next) })
-  }
   if (run.command === 'fitting-room-flow' && run.args?.room) {
     const id = run.args.room
     const cache = s.fittingRoomFlows ?? {}
     const next = outcome<Flow>(cache[id], { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFlow(stdout) }))
     return save({ fittingRoomFlows: cacheProject(cache, id, next) })
   }
-  if (run.command === 'fitting-room-connections' && run.args?.room) {
-    const id = run.args.room
-    const cache = s.fittingRoomConnections ?? {}
+  // Browse commands: a page per query; "load more" runs append to it (mergePage).
+  const empty = <Q>(query: Q) => ({ at, runId: run.id, query, rows: [], hasMore: false })
+  if (run.command === 'projects') {
+    const query = queryOf<ProjectsQuery>(run.args, ['q', 'status', 'sort'])
+    const next = outcome<Projects>(s.projects, empty(query), run, () => mergePage(s.projects, query, offset, parseProjects(stdout), at, run.id, p => p.id))
+    const pins = s.pins && refreshPins(s.pins, next.rows)
+    return save(pins ? { projects: next, pins } : { projects: next })
+  }
+  // One connection list per project or fitting room, same columns and parser, cached by that id.
+  if (run.command === 'project-connections' || run.command === 'fitting-room-connections') {
+    const [param, key] = run.command === 'project-connections' ? ['project', 'projectConnections'] as const : ['room', 'fittingRoomConnections'] as const
+    const id = run.args?.[param]
+    if (!id) return
+    const cache = s[key] ?? {}
     const query = queryOf<ConnectionsQuery>(run.args, ['q', 'sort'])
-    const next = outcome<FittingRoomConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
-    return save({ fittingRoomConnections: cacheProject(cache, id, next) })
+    const next = outcome<ProjectConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
+    return save({ [key]: cacheProject(cache, id, next) })
   }
   if (run.command === 'connections') {
     const query = queryOf<TextQuery>(run.args, ['q'])
-    const next = outcome<Connections>(s.connections, empty(query), run, () => mergePage(s.connections, query, offset, parseConnections(stdout), at, run.id, c => c.connectionId))
-    return save({ connections: next })
+    return save({ connections: outcome<Connections>(s.connections, empty(query), run, () => mergePage(s.connections, query, offset, parseConnections(stdout), at, run.id, c => c.connectionId)) })
   }
   if (run.command === 'fitting-rooms') {
     const query = queryOf<TextQuery>(run.args, ['q'])
-    const next = outcome<FittingRooms>(s.fittingRooms, empty(query), run, () => mergePage(s.fittingRooms, query, offset, parseFittingRooms(stdout), at, run.id, r => r.id))
-    return save({ fittingRooms: next })
+    return save({ fittingRooms: outcome<FittingRooms>(s.fittingRooms, empty(query), run, () => mergePage(s.fittingRooms, query, offset, parseFittingRooms(stdout), at, run.id, r => r.id)) })
   }
 }
 

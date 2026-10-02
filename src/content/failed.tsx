@@ -2,7 +2,7 @@
 // (delete-syncs, FAIL tab only: the DELETE only removes FAIL rows), like fish refit-sync_delete. Delete is occasional, so it hides behind a Select mode: cards get a check, a sticky bulk bar holds the count and
 // Delete, and that bar expands in place into the confirm (preview, environment; Tabularis approval is the last gate).
 import { useEffect, useState } from 'react'
-import { ago, plural, runStatus } from '../term'
+import { ago, plural, runOk, runStatus } from '../term'
 import { dateRange, SYNC_STATUSES, type FailedSyncs, type SyncRequests, type SyncStatus } from '../failed-syncs'
 import { ENV } from '../table'
 import { isRunning } from '../shared/store'
@@ -41,7 +41,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
   const deleting = del.mine
   const last = (ofTab(run) ? fetching.last : undefined) ?? (status === 'FAIL' ? del.last : undefined)
   // A clean fetch is already said by "updated 2m ago"; the pill only shows a failed run or a delete's result.
-  const st = last && (last.command === 'delete-syncs' || last.exit !== 0 || last.error) ? runStatus(last, now) : undefined
+  const st = last && (last.command === 'delete-syncs' || !runOk(last)) ? runStatus(last, now) : undefined
   const exit = () => { setSelecting(false); sel.clear(); setConfirming(false) }
   // A finished delete: its rows are gone, so leave select mode.
   useEffect(() => { if (last?.command === 'delete-syncs' && del.ok) exit() }, [last?.id])

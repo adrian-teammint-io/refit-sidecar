@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { parseFailedSyncs, connectionUrl, platform, dateRange, liveFails } from './failed-syncs.ts'
+import { parseFailedSyncs, platform, dateRange, liveFails } from './failed-syncs.ts'
+import { connectionUrl } from './links.ts'
 
 // Captured from a real `failed-syncs` run against prod (2026-10-01); recovered_* (added later) set to NULL by hand.
 const sample = readFileSync(new URL('./samples/failed-syncs.stdout.txt', import.meta.url), 'utf8')

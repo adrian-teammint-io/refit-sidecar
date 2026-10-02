@@ -8,12 +8,13 @@ import type { FittingRoomFlows } from '../flow'
 import { DEFAULTS, type Settings } from '../themes'
 import { DATA_KEYS, ENV, envKey } from '../table'
 
-export type Store = {
-  settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean
+// The per-environment results (DATA_KEYS in table.ts), as the worker writes them and every surface reads them.
+export type Data = {
   failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
   connections?: Connections; fittingRooms?: FittingRooms; fittingRoomConnections?: FittingRoomConnections; fittingRoomFlows?: FittingRoomFlows; pins?: Pins; projectMembers?: ProjectMembers; userSearch?: UserSearch
   syncRequests?: SyncRequests
 }
+export type Store = Data & { settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean }
 // Results are per environment (envKey: staging's are stored as "stag.<key>"); settings, run and host are shared.
 const KEYS = {
   local: ['settings', 'run', ...DATA_KEYS],

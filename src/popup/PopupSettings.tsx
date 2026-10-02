@@ -1,6 +1,6 @@
 import type { HostState } from '../api'
 import type { Settings } from '../themes'
-import { APP } from '../failed-syncs'
+import { APP } from '../table'
 import { FontPicker, KeybindList, Switch, ThemePicker } from '../shared/controls'
 import { HostCard } from '../shared/HostSetup'
 

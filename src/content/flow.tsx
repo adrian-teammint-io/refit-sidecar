@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import { ago, plural, runStatus } from '../term'
 import { ENV } from '../table'
-import { fittingNodeUrl } from '../failed-syncs'
+import { fittingNodeUrl } from '../links'
 import { BOX, layers, layout, matchesNode, type Flow, type FlowNode } from '../flow'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'

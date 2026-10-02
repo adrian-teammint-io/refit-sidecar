@@ -1,7 +1,7 @@
 import type { HostState } from '../api'
 import type { Settings } from '../themes'
 import { APP } from '../failed-syncs'
-import { Switch, ThemePicker } from '../shared/controls'
+import { KeybindList, Switch, ThemePicker } from '../shared/controls'
 import { HostCard } from '../shared/HostSetup'
 
 export function PopupSettings({ settings, dark, host, onChange }: { settings: Settings; dark: boolean; host?: HostState; onChange: (s: Partial<Settings>) => void }) {
@@ -23,6 +23,11 @@ export function PopupSettings({ settings, dark, host, onChange }: { settings: Se
           <span className="muted">Failed-sync count on the icon, "!" when the host is missing</span>
         </div>
         <Switch label="Count on the toolbar icon" checked={settings.badge} onChange={badge => onChange({ badge })} />
+      </section>
+
+      <section>
+        <h2 className="eyebrow">Keyboard shortcuts</h2>
+        <KeybindList settings={settings} onChange={onChange} />
       </section>
 
       <nav className="p-links">

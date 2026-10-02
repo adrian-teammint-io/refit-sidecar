@@ -159,6 +159,17 @@ code { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background:
 .ok-chip svg { color: var(--tone); }
 .light .ok-chip { --tone: #16a34a; }
 
+/* Keybind list (shared/controls.tsx KeybindList): setting rows with a key you click, then press */
+.keybinds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.key-capture {
+  min-width: 40px; height: 32px; padding: 0 8px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0;
+  border: 1px solid var(--line-strong); transition: border-color 150ms ease, box-shadow 150ms ease, transform 160ms var(--ease-out);
+}
+.key-capture kbd { font-size: 12px; color: var(--text); }
+.key-capture:active { transform: scale(0.96); }
+.key-capture[data-capturing='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.keybinds .link-btn { flex-shrink: 0; }
+
 /* Host card + setting rows (drawer settings, popup settings, options page) */
 .host-card, .setting-row {
   display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line);

@@ -1,3 +1,5 @@
+import type { Keys } from './keybinds'
+
 // Each theme: [bg, surface, raised, text, muted, accent, onAccent] for dark and light.
 type Pal = [string, string, string, string, string, string, string]
 export const THEMES: Record<string, { label: string; dark: Pal; light: Pal }> = {
@@ -20,8 +22,9 @@ export type Settings = {
   mode: Mode
   badge: boolean // toolbar icon shows the failed-sync count
   drawerWidth: number // px, dragged from the drawer's left edge
+  keys: Partial<Keys> // keyboard shortcut overrides (keybinds.ts); keysOf() fills in the defaults
 }
-export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440 }
+export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440, keys: {} }
 
 export function vars(theme: string, dark: boolean): Record<string, string> {
   const [bg, surface, raised, text, muted, accent, onAccent] = (THEMES[theme] ?? THEMES.graphite)[dark ? 'dark' : 'light']

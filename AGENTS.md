@@ -34,12 +34,13 @@ Surfaces:
      - Members (`content/members.tsx`): the member list (auto-loads once, refresh in the status line), and **Add user**: search existing users by email or name (debounced), pick one (members are shown as `member · role` and can't be picked), choose a role (Viewer default), then confirm with a PROD/STAG tag. On prod you type the email's part before `@` to enable Add. After it finishes, the toast says "Added as viewer" or "Already a member; nothing changed", the form closes and the list reloads. Esc closes the form first. There's no Refit page to link to: the app's member UI is a modal under `/admin/projects` with no URL.
    - **Connections** / **Fitting rooms**: search everything. Each card links to Refit, and its project name opens that project's view.
    - **Connection cards** (project Connections tab and Connections search) take their FAIL count and reason box from `liveFails()` (`failed-syncs.ts`): when the Sync requests FAIL list is newer than the card's page (a refetch, or a delete dropping rows), its rows for that connection win, and FAILs a later SUCCESS covers are counted but show no reason; otherwise the page's values, with the reason only while the newest sync is FAIL (a resolved row can keep its old reason text). A truncated list can't prove "none", so then the page wins. The status pill always comes from the page.
-   - They also have the same **Select** mode as Sync requests, but the bulk bar's action is **Open N in Refit**: the worker opens each connection page in a background tab (`openTabs` in `background.ts`, at most `MAX_TABS` = 10, only URLs shaped like `connectionUrl()`). Deleting happens there, in Refit's own dialog. There's deliberately no connection delete in the drawer: refit-gql `delete_connection` (`db/api.py:1158-1256`) refuses if a fitting room uses the connection, deletes seed_data / data_source / column_definition(_action) / connection / column_selection / service_connection in order, and `DROP`s the seed view and the `{service}."{id}"` data table. A plain `DELETE FROM connection` fails on the RESTRICT FK from column_definition_action, or leaves those behind. If a real Delete button is wanted later, the proposed route is calling Refit's own `deleteServiceConnection` mutation with the logged-in user's session (Refit then does every check and cleanup). Not built: it means reading the user's token from the page, which breaks the "reads nothing from the page" rule below, so ask Hoàn first.
+   - They also have the same **Select** mode as Sync requests (the **Select** / **Done** toggle sits in the status line through `StatusLine`'s `tools` slot, next to Refresh / Cancel; the panel owns `selecting`), but the bulk bar's action is **Open N in Refit**: the worker opens each connection page in a background tab (`openTabs` in `background.ts`, at most `MAX_TABS` = 10, only URLs shaped like `connectionUrl()`). Deleting happens there, in Refit's own dialog. There's deliberately no connection delete in the drawer: refit-gql `delete_connection` (`db/api.py:1158-1256`) refuses if a fitting room uses the connection, deletes seed_data / data_source / column_definition(_action) / connection / column_selection / service_connection in order, and `DROP`s the seed view and the `{service}."{id}"` data table. A plain `DELETE FROM connection` fails on the RESTRICT FK from column_definition_action, or leaves those behind. If a real Delete button is wanted later, the proposed route is calling Refit's own `deleteServiceConnection` mutation with the logged-in user's session (Refit then does every check and cleanup). Not built: it means reading the user's token from the page, which breaks the "reads nothing from the page" rule below, so ask Hoàn first.
    - **Sync requests** (`content/failed.tsx`, view kind `failed`): status tabs **FAIL** (default) | **IN_PROGRESS** | **FRAGMENTED**, one `failed-syncs` command with a `sync_status` param (FAIL is stored in `failedSyncs`, which the popup and toolbar icon read; the others in `syncRequests[status]`; a never-fetched tab fetches on first open). Select / Delete only on FAIL. Parsed sync cards, each with **Open in Refit** in its foot and a green **Succeeded after** chip when a later SUCCESS on the same connection covers the FAIL's end_date (`recovered_*` columns in `failed-syncs.sql`, the fish `refit-sync_success_after_fail` rule); **Fetch** (then **Refetch**) runs it. Delete hides behind **Select**: cards get a round check (clicking the card toggles it; selected = accent border + ring, red only on Delete), and a sticky bulk bar shows the count, **Select all** (first 100) / **Clear**, and **Delete N**. Delete expands that bar in place into the confirm: PROD/STAG tag, a preview of the rows, and Delete (no typed count; Tabularis approval is the last gate). Back or Esc closes it. A delete never queues: it's refused while another command runs. Deleted rows (from `RETURNING id`) drop out of the list; if Tabularis doesn't return them, the list is fetched again. The toast and status pill show `run.summary` ("Deleted 3 of 3 …").
    - **Staging**: on staging-app.refit.ai the drawer is `ENV = 'stag'` (`src/table.ts`, from `location.hostname`), shows an amber **STAG** chip in the header, sends `env: 'stag'` with every command, and links to staging-app.refit.ai.
    - **No Output view**: the `pnpm server` terminal already prints every run live. A failed run keeps its last stderr line (`run.tail`, set in `finish()`), and the error banners and the failure toast show it ("Command failed (exit 1): run_query error: …"). `tabularis-query.mjs` prints Tabularis's log before its own error so that line is the reason.
    - Every browse view shows its cached page at once and, when that page is older than 30s (`MAX_AGE` in `browse.tsx`), fetches it again in the background (rows dim meanwhile; a refetch goes back to the first batch). It also has a status line (count, refresh, cancel) and **Load 30 more**, which also fires by itself when it scrolls into view (IntersectionObserver, once per batch, not after an error). Rows dim while a new query loads.
    - Launcher with the failed count, and a toast when a run started from this tab finishes.
+   - **Keyboard shortcuts** (see [Keyboard shortcuts](#keyboard-shortcuts)): **R** refetches the current view; the footer shows the bound key.
 2. **Toolbar icon + popup**: last run summary (count tinted red when > 0, "in N projects · newest Xm ago", exit status, duration), the 4 newest failures, raw output, settings. FAIL only. The toolbar icon itself is redrawn with the count (`countIcon()` in `background.ts`: OffscreenCanvas, red tile with the number, `99+` cap; amber `!` when the native host isn't installed; the normal icon otherwise or when the setting is off). No badge text.
 3. **Settings page**: native host setup with this extension's id filled in, plus live server status.
 
@@ -50,7 +51,7 @@ Surfaces:
 | `pnpm dev` | Watch-build into `dist/` (load `dist/` unpacked, hit reload in `chrome://extensions`) |
 | `pnpm build` | Typecheck + production build |
 | `pnpm server` | **The terminal server.** Keep it open: it runs the commands, prints every run live, and streams output back to the page |
-| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `src/projects.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
+| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `src/projects.test.ts`, `src/keybinds.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm install-host <extension id>` | Writes the wrapper `host/refit-sidecar-host` and `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.hoan.refit_sidecar.json` (`allowed_origins` = this id only) |
 | `pnpm uninstall-host` | Removes both |
@@ -114,6 +115,18 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
 3. Parse: write a pure parser with `parseTable()` (`src/table.ts`, which looks columns up by name, turns `""` into null for nullable columns, and checks numbers) plus a `*.test.ts` against captured output in `src/samples/`. Store the result in `storeResult()` in `src/host.ts` through its `save()` (which keys it by the run's env), under its own key, and add that key to `DATA_KEYS` in `src/table.ts` and the `Store` type in `shared/store.ts`. Send `env: ENV` with the run (browse views get it from `useBrowse`).
 4. UI: add a view in `content/views.tsx` and a row on `Home`, add the view to `View` and `TITLES` in `content/App.tsx` (a browse view: `useBrowse` + `Browse` from `content/browse.tsx`), then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
 
+## Keyboard shortcuts
+
+One mapping list, `KEYBINDS` in `src/keybinds.ts` (pure, tested by `keybinds.test.ts`), is the source for every surface:
+- Each action is `{label, hint, default}`; today only `refetch` (default `r`). `settings.keys` stores only the user's overrides; `keysOf(settings.keys)` gives the full map (invalid overrides fall back to the default).
+- `actionFor(event, keys)` maps a keypress to an action. It ignores Cmd / Ctrl / Alt (so Cmd+R stays the browser's reload) and anything typed into an input, textarea, select or contenteditable; Shift is fine. Keys are single letters or digits (`validKey`), so Esc / arrows / Enter stay fixed and are not in the list.
+- `rebind(keys, action, key)` refuses a key another action already uses.
+- Settings (drawer and popup) render `<KeybindList settings onChange />` from `shared/controls.tsx`: one row per action, click the key then press the new one (Esc cancels, Reset returns to the default). Its keydown is stopped so the drawer doesn't act on it.
+- Drawer: `App`'s `onKeyDown` clicks the current view's `[data-refetch]` control (the StatusLine refresh icon, the Sync requests Fetch / Refetch button). A view with nothing to refetch (Home, Settings) has none, and neither does a view while its run is going (Cancel replaces Refresh). The footer shows `<kbd>` with the bound key on every view but Home and Settings.
+- Popup: a `document` keydown listener (the popup opens with focus on `<body>`) runs the FAIL fetch, except on its Settings view or while a run is going.
+
+**Adding a shortcut:** add an entry to `KEYBINDS`, handle the action where it applies (`actionFor(e, keys) === '<action>'`, or mark the target control with a `data-*` attribute the drawer clicks, like `data-refetch`), and add a case to `keybinds.test.ts`. Settings lists it automatically.
+
 ## Codebase structure
 
 Read this first when a request comes in: find the feature in **Where to edit**, open those files, and grep the named symbol. Symbols are given instead of line numbers so they stay valid.
@@ -143,12 +156,13 @@ src/
   failed-syncs.ts         FailedSync (+ recovered*), parseFailedSyncs, SYNC_STATUSES / SyncStatus / SyncRequests, liveFails,
                           URL builders connectionUrl / projectUrl / fittingRoomUrl, platform, dateRange
   term.ts                 ANSI strip, line split/cap, ago(), runStatus() (pill text + tone)
-  themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth), DEFAULTS, vars(); shared CSS primitives + sync cards
+  keybinds.ts             KEYBINDS (the shortcut mapping list), keysOf, actionFor, rebind, validKey, keyLabel, isTyping
+  themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth, keys), DEFAULTS, vars(); shared CSS primitives + sync cards
   shared/
     store.ts              useStore() (reads this tab's env keys + live updates), saveSettings, useDark, useNow, isRunning
     SyncList.tsx          sync cards (drawer + popup): Succeeded after chip, status-aware foot/reason, select mode, Open in Refit
     icons.tsx             ICONS (Lucide paths; add new icons here), Icon, IconBtn
-    controls.tsx          Segmented, Switch, ThemePicker
+    controls.tsx          Segmented, Switch, ThemePicker, KeybindList
     HostSetup.tsx         host missing / offline screens, hostLabel / hostTone, HostCard
     Terminal.tsx          raw output (popup's Output tab only)
   content/                the drawer (content script, closed shadow DOM)
@@ -168,7 +182,7 @@ src/
     styles.css            drawer styles, one `/* … */` section per feature (see Where to edit)
   popup/                  toolbar popup: main.tsx (Popup), PopupSettings.tsx, popup.css
   options.tsx             extension settings page (host setup)
-  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects) against src/samples/
+  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects, keybinds) against src/samples/
 .claude/skills/           ui-system (design rules), ui-verify (stub.js + mock.html + shoot.sh screenshots)
 ```
 
@@ -190,7 +204,7 @@ src/
 | Members list, Add user | `content/members.tsx`, `host/sql/project-members.sql`, `user-search.sql`, `add-project-user.sql` | `MembersPanel`, `AddUser`, `UserPicker`; CSS "Project members + Add user" |
 | New project form | `content/new-project.tsx`, `host/sql/create-project.sql`, `host/protocol.mjs` | `NewProjectView`, `DEFAULT_MEMBER`; `CREATE_PROJECT`, `SHAPES`; CSS "New project form" |
 | Sync requests (status tabs), select, delete confirm | `content/failed.tsx`, `shared/SyncList.tsx`, `host/sql/failed-syncs.sql`, `delete-syncs.sql` | `FailedView`, `SYNC_STATUSES`, `Confirm`, `MAX_DELETE`, `SyncList`; CSS "Failed syncs…", "Bulk bar" |
-| Search box, status line, error banner, empty / loading, load more | `content/browse.tsx` | `SearchBox`, `StatusLine`, `ErrorBanner`, `Empty`, `Skeleton`, `LoadMore`, `useBrowse` (`MAX_AGE` revalidate); CSS "Search", "Run bar", "Browse results", "Loading skeleton" |
+| Search box, status line, error banner, empty / loading, load more | `content/browse.tsx` | `SearchBox`, `StatusLine` (`tools` slot, `data-refetch`), `ErrorBanner`, `Empty`, `Skeleton`, `LoadMore`, `useBrowse` (`MAX_AGE` revalidate); CSS "Search", "Run bar", "Browse results", "Loading skeleton" |
 | Batch size, paging, query <-> args | `projects.ts` (+ every browse SQL's `LIMIT 31`) | `BATCH`, `toArgs`, `queryOf`, `mergePage` |
 | Prod vs staging behaviour | `table.ts`, `host/protocol.mjs` | `ENV`, `APP`, `envKey`, `DATA_KEYS`; `CONNECTIONS` |
 | Links into Refit | `failed-syncs.ts` | `connectionUrl`, `projectUrl`, `fittingRoomUrl` (UUID-checked) |
@@ -198,11 +212,12 @@ src/
 | Run queueing, cancel, superseding | `host.ts` | `startRun`, `WRITES`, `cancelRun`, `pending` |
 | Which SQL is allowed, param validation | `host/protocol.mjs`, `host/commands.json` | `PARAMS`, `bindParams`, `WRITES`, `checkQuery`; the command's `params` patterns |
 | Running SQL through Tabularis (timeouts, errors) | `host/tabularis-query.mjs` | `fail`, `TIMEOUT_MS`, `onReply` |
+| Keyboard shortcuts (add, rebind UI, handling) | `keybinds.ts`, `shared/controls.tsx`, `content/App.tsx`, `popup/main.tsx` | `KEYBINDS`, `actionFor`, `rebind`, `KeybindList`, `data-refetch`; CSS `.keybinds`, `.key-capture` (ui.css) |
 | Theme, colours, mode, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `SettingsView` |
 | Icons | `shared/icons.tsx` | `ICONS` (add a path), `Icon`, `IconBtn` |
 | Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; icon: `paint`, `countIcon` |
 | Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |
-| Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html (`&tab=IN_PROGRESS` picks a Sync requests tab), `MODES` in shoot.sh; the stub records requests on `<html data-sent>` for `--dump-dom` checks |
+| Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html (`&tab=IN_PROGRESS` picks a Sync requests tab, `&reloading` = the Connections search refetching over its page), `MODES` in shoot.sh; the stub records requests on `<html data-sent>` for `--dump-dom` checks |
 
 ### How a command flows (touch these in order for a new one)
 

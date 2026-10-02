@@ -48,8 +48,10 @@ export function useBrowse<Q extends { q: string } & Record<string, string>, T>({
   }
 }
 
-export function StatusLine({ run, now, command, extra, loading, meta, onRefresh, onCancel }: {
-  run?: Run; now: number; command: Command; extra?: Args; loading: boolean; meta: string; onRefresh: () => void; onCancel: () => void
+// `tools`: view buttons (e.g. Select) laid out in the same flex row, so they never overlap Refresh / Cancel.
+// The refresh button carries data-refetch: the drawer's Refetch shortcut (keybinds.ts) clicks it (App.tsx).
+export function StatusLine({ run, now, command, extra, loading, meta, tools, onRefresh, onCancel }: {
+  run?: Run; now: number; command: Command; extra?: Args; loading: boolean; meta: string; tools?: ReactNode; onRefresh: () => void; onCancel: () => void
 }) {
   const mine = isRunning(run) && runMatches(run, command, extra)
   const other = isRunning(run) && !mine
@@ -59,9 +61,10 @@ export function StatusLine({ run, now, command, extra, loading, meta, onRefresh,
       <span className="muted">{mine ? (loading ? 'Searching…' : 'Loading more…') : other ? `Queued after ${run!.command}` : meta}</span>
       <span className="spacer" />
       {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
+      {tools}
       {mine
         ? <button className="btn ghost sm" onClick={onCancel}><Icon d="stop" size={13} />Cancel</button>
-        : <button className="icon-btn sm" onClick={onRefresh} aria-label="Refresh" title="Refresh"><Icon d="refresh" size={14} /></button>}
+        : <button className="icon-btn sm" onClick={onRefresh} aria-label="Refresh" title="Refresh" data-refetch><Icon d="refresh" size={14} /></button>}
     </div>
   )
 }

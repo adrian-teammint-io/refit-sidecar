@@ -50,7 +50,8 @@ body { margin: 0; width: 420px; }
 .p-foot { display: flex; justify-content: space-between; font-size: 11px; border-top: 1px solid var(--line); padding: 10px 0 0; }
 
 /* Settings view */
-.p-settings { display: flex; flex-direction: column; gap: 18px; padding-bottom: 4px; }
+.p-settings { display: flex; flex-direction: column; gap: 18px; padding-bottom: 4px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.p-settings > * { flex-shrink: 0; }
 .p-settings section > .eyebrow { margin-bottom: 8px; }
 .p-settings .segmented + .themes { margin-top: 10px; }
 .p-settings .themes { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }

@@ -5,6 +5,7 @@ import '@fontsource-variable/jetbrains-mono/wght.css'
 import './popup.css'
 import { call } from '../api'
 import { vars } from '../themes'
+import { actionFor, keyLabel, keysOf } from '../keybinds'
 import { ago, runStatus } from '../term'
 import { APP } from '../failed-syncs'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
@@ -36,6 +37,17 @@ function Popup() {
     setError('')
     try { await call({ type: 'run', command: 'failed-syncs' }) } catch (e) { setError((e as Error).message) }
   }
+  // Refetch (keybinds.ts, default R) runs the FAIL fetch, like the drawer. On document: the popup opens with focus
+  // on <body>. Not in Settings, where the key may be being rebound.
+  const keys = keysOf(settings.keys)
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (view === 'settings' || running || actionFor(e, keys) !== 'refetch') return
+      e.preventDefault(); runIt()
+    }
+    document.addEventListener('keydown', on)
+    return () => document.removeEventListener('keydown', on)
+  }, [view, running, keys.refetch])
   const cancel = () => call({ type: 'cancel' }).catch(e => setError((e as Error).message))
 
   return (
@@ -46,7 +58,7 @@ function Popup() {
         <h1>{view === 'settings' ? 'Settings' : 'Refit failed syncs'}</h1>
         {view !== 'settings' && <>
           <span className="muted p-updated">{running ? 'Running…' : fs?.at ? `Updated ${ago(fs.at, now)}` : ''}</span>
-          <IconBtn icon="refresh" label={running ? 'Running…' : 'Fetch FAIL syncs'} onClick={runIt} disabled={running} spin={running} />
+          <IconBtn icon="refresh" label={running ? 'Running…' : `Fetch FAIL syncs (${keyLabel(keys.refetch)})`} onClick={runIt} disabled={running} spin={running} />
           <IconBtn icon="gear" label="Settings" onClick={() => setView('settings')} />
         </>}
       </header>

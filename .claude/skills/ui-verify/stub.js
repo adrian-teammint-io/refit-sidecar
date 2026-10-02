@@ -34,6 +34,8 @@ const lines = [
 const running = MODE === 'output'
 const run = MODE === 'never' ? undefined
   : MODE === 'loading' ? { id: 'p2', command: 'projects', args: { q: '', status: 'all', sort: 'active', offset: '0' }, startedAt: now - 1800 }
+  // `reloading` flag: the connections search is being fetched again over its cached page (status line shows Cancel)
+  : /reloading/.test(Q) ? { id: 'c2', command: 'connections', args: { env: 'prod', q: '', offset: '0' }, startedAt: now - 900 }
   : { id: 'r1', command: 'failed-syncs', startedAt: now - (running ? 3400 : 125000), ...(running ? {} : { endedAt: now - 124000, exit: MODE === 'error' ? 1 : 0 }) }
 const failedSyncs = MODE === 'never' ? undefined : { at: now - 124000, runId: 'r1', rows: MODE === 'zero' ? [] : rows, truncated: MODE === 'many', ...(MODE === 'error' ? { error: 'Command failed (exit 1). See Output.' } : {}) }
 const P = (i, name, status, plan, connections, failed, mins) => ({ id: uuid(900 + i), name, status, plan, connections, failed, lastSync: mins === null ? null : new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z' })

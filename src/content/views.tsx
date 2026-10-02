@@ -1,6 +1,6 @@
 // Drawer views. Home lists the commands; each command opens its own view. All data comes from storage (useStore).
 // Browse views fetch in batches of BATCH: typing re-queries the server (debounced), "Load more" fetches the next batch.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { call, MAX_TABS, type Run } from '../api'
 import { ago } from '../term'
 import { dateRange, platform, connectionUrl, projectUrl, fittingRoomUrl, liveFails, type FailedSyncs } from '../failed-syncs'
@@ -152,12 +152,14 @@ function ProjectConnectionsPanel({ project, cache, openFailed, fs, ...c }: { pro
   const page = cache?.[project.id]
   const extra = { project: project.id }
   const b = useBrowse({ page, query, command: 'project-connections', extra, ...c })
+  const [selecting, setSelecting] = useState(false)
   return (
     <>
       <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel}
+        tools={<SelectToggle selecting={selecting} setSelecting={setSelecting} rows={page?.rows} />}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : 'This project has no data sources yet.'} />}
-        rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} />}>
+        rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name or platform" />
         <div className="filters">
           <Segmented label="Sort connections" value={query.sort} options={CONN_SORTS} onChange={sort => setQuery({ ...query, sort })} />
@@ -167,32 +169,34 @@ function ProjectConnectionsPanel({ project, cache, openFailed, fs, ...c }: { pro
   )
 }
 
+// Select / Done for a connection card list, shown in the list's status line (Browse `tools`).
+function SelectToggle({ selecting, setSelecting, rows }: { selecting: boolean; setSelecting: (v: boolean) => void; rows?: ProjectConnection[] }) {
+  if (selecting) return <button className="btn ghost sm" onClick={() => setSelecting(false)}>Done</button>
+  if (!rows?.some(r => connectionUrl(r))) return null
+  return <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>
+}
+
 // Connection cards. groupBy=service adds a header whenever the platform changes (rows arrive sorted by it).
 // Select mode (same UX as Failed syncs) opens the chosen connections' Refit pages in background tabs: deleting a
 // connection happens there, in Refit's own dialog, which checks fitting rooms and drops the connection's data table
 // and seed view. A plain DELETE here would leave those behind (see AGENTS.md).
-function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageAt }: {
+function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageAt, selecting, setSelecting }: {
   rows: (ProjectConnection & { project?: string })[]; now: number; groupBy?: 'service'; openProject?: (p: ProjectRef) => void; openFailed: OpenFailed
   fs?: FailedSyncs; pageAt: number // the Sync requests FAIL list and this page's fetch time, for liveFails
+  selecting: boolean; setSelecting: (v: boolean) => void // owned by the panel: its Select toggle lives in the status line
 }) {
   const [open, setOpen] = useState<string>()
-  const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [err, setErr] = useState('')
   const selectable = rows.filter(c => connectionUrl(c))
   const selected = selectable.filter(c => picked.has(c.connectionId))
   const toggle = (id: string) => setPicked(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s })
-  const exit = () => { setSelecting(false); setPicked(new Set()); setErr('') }
+  const exit = () => setSelecting(false)
+  useEffect(() => { if (!selecting) { setPicked(new Set()); setErr('') } }, [selecting])
   const allOn = !!selectable.length && selected.length === Math.min(selectable.length, MAX_TABS)
   const openAll = () => call({ type: 'openTabs', urls: selected.map(c => connectionUrl(c)!) }).then(exit, e => setErr((e as Error).message))
   return <>
-    <div className="list-tools">
-      <span className="muted">{selecting ? 'Pick connections to open in Refit (delete them there)' : ''}</span>
-      <span className="spacer" />
-      {selecting
-        ? <button className="btn ghost sm" onClick={exit}>Done</button>
-        : !!selectable.length && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
-    </div>
+    {selecting && <p className="list-tools muted">Pick connections to open in Refit (delete them there)</p>}
     <ul className="syncs" data-selecting={selecting}>
       {rows.map((c, i) => {
         const url = connectionUrl(c)
@@ -258,12 +262,14 @@ export function ConnectionsView({ page, query, setQuery, openProject, openFailed
   page?: Connections; fs?: FailedSyncs; query: { q: string }; setQuery: (q: { q: string }) => void; openProject: (p: ProjectRef) => void; openFailed: OpenFailed
 } & Common) {
   const b = useBrowse({ page, query, command: 'connections', ...c })
+  const [selecting, setSelecting] = useState(false)
   return (
     <div className="pane">
       <Browse page={page} b={b} run={c.run} now={c.now} command="connections" cancel={c.cancel}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections${page.query.q ? ` matching "${page.query.q}"` : ''}` : ''}
         empty={<Empty icon="search" title="No matching connections" text="Search matches connection name, platform (META, TIKTOK…) or id." />}
-        rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} />}>
+        tools={<SelectToggle selecting={selecting} setSelecting={setSelecting} rows={page?.rows} />}
+        rowsFor={rows => <ConnectionList rows={rows as ConnectionHit[]} now={c.now} openProject={openProject} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ q })} placeholder="Search connections in every project" autoFocus />
       </Browse>
     </div>

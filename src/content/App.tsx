@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
+import { actionFor, keyLabel, keysOf } from '../keybinds'
 import { runStatus } from '../term'
 import { togglePin, type Project, type ProjectsQuery } from '../projects'
 import { ENV, envKey } from '../table'
@@ -47,6 +48,7 @@ class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }>
 export function App() {
   const store = useStore()
   const { settings, host, run, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, syncRequests, loaded } = store
+  const keys = keysOf(settings.keys)
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
   // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
@@ -139,7 +141,14 @@ export function App() {
       </button>
       <aside ref={drawer} className="drawer" data-open={open} data-resizing={resize.active} inert={!open} aria-label="Refit Sidecar"
         style={{ width: `min(${resize.width}px, calc(100vw - 24px))` }}
-        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); stack.length > 1 ? back() : setOpen(false) } }}>
+        onKeyDown={e => {
+          if (e.key === 'Escape') { e.stopPropagation(); stack.length > 1 ? back() : setOpen(false) }
+          // Refetch (keybinds.ts, default R) clicks the current view's [data-refetch] control (absent while it runs).
+          else if (actionFor(e, keys) === 'refetch') {
+            const btn = drawer.current?.querySelector<HTMLButtonElement>('.body [data-refetch]:not(:disabled)')
+            if (btn) { e.preventDefault(); btn.click() }
+          }
+        }}>
         <div className="resize" {...resize.handle} />
         <header className="head">
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
@@ -153,6 +162,7 @@ export function App() {
         <footer className="foot">
           {host && <span className="pill" data-tone={hostTone(host)}>{hostLabel(host)}</span>}
           <span className="spacer" />
+          {stack.length > 1 && view.kind !== 'settings' && <span><kbd>{keyLabel(keys.refetch)}</kbd> refetch</span>}
           <span><kbd>Esc</kbd> {stack.length > 1 ? 'back' : 'close'}</span>
         </footer>
         {toast && <div className="toast" role="status">{toast}</div>}

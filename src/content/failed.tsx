@@ -64,7 +64,7 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
           : selecting ? <button className="btn ghost sm" onClick={exit}>Done</button>
           : <>
               {!!n && status === 'FAIL' && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
-              <button className="btn primary sm" onClick={load}><Icon d="refresh" size={13} />{fs ? 'Refetch' : 'Fetch'}</button>
+              <button className="btn primary sm" onClick={load} data-refetch><Icon d="refresh" size={13} />{fs ? 'Refetch' : 'Fetch'}</button>
             </>}
       </div>
       <ErrorBanner error={fs?.error} hasRows={!!n} />

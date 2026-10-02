@@ -1,6 +1,6 @@
 import type { HostState } from '../api'
 import type { Settings } from '../themes'
-import { Switch, ThemePicker } from '../shared/controls'
+import { KeybindList, Switch, ThemePicker } from '../shared/controls'
 import { HostCard } from '../shared/HostSetup'
 
 export function SettingsView({ settings, dark, host, onChange }: {
@@ -22,6 +22,10 @@ export function SettingsView({ settings, dark, host, onChange }: {
           <span className="muted">Show the failed-sync count on the extension icon</span>
         </div>
         <Switch label="Count on the toolbar icon" checked={settings.badge} onChange={badge => onChange({ badge })} />
+      </section>
+      <section>
+        <h2>Keyboard shortcuts</h2>
+        <KeybindList settings={settings} onChange={onChange} />
       </section>
     </div>
   )

@@ -20,7 +20,7 @@ export type View =
   | { kind: 'projects' }
   | { kind: 'connections' }
   | { kind: 'fitting' }
-  | { kind: 'new-project' }
+  | { kind: 'new-project'; from?: ProjectRef } // from: Duplicate pre-fills the form from this project and its members
   | { kind: 'project'; project: ProjectRef }
   | { kind: 'settings' }
 
@@ -50,7 +50,7 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
     title: 'Projects',
     header: { icon: 'plus', label: 'New project', open: { kind: 'new-project' } },
     render: (_, x) => <ProjectsView projects={x.store.projects} pins={x.store.pins} query={x.queries.projects[0]} setQuery={x.queries.projects[1]}
-      openProject={x.openProject} pin={x.pin} {...x.common} />,
+      openProject={x.openProject} pin={x.pin} duplicate={from => x.push({ kind: 'new-project', from })} {...x.common} />,
   },
   project: {
     title: v => v.project.name,
@@ -59,8 +59,9 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
       openProject={x.openProject} openFailed={x.openFailed} fs={x.store.failedSyncs} {...x.common} />,
   },
   'new-project': {
-    title: 'New project',
-    render: (_, x) => <NewProjectView search={x.store.userSearch} onCreated={project => x.replace({ kind: 'project', project })} {...x.common} />,
+    title: v => (v.from ? 'Duplicate project' : 'New project'), // the source's name is already in the form
+    render: (v, x) => <NewProjectView key={v.from?.id} from={v.from} fromMembers={v.from && x.store.projectMembers?.[v.from.id]} search={x.store.userSearch}
+      onCreated={project => x.replace({ kind: 'project', project })} {...x.common} />,
   },
   connections: {
     title: 'Connections',

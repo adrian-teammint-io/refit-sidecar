@@ -90,12 +90,28 @@ const syncRequests = MODE === 'never' ? undefined : {
 }
 const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}) }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
+// `answer` in the hash: a project-members run "finishes" 50ms later with STUB_MEMBERS (u1 is the owner), through
+// storage.onChanged like the worker's writes. Everything else stays unanswered.
+const listeners = []
+const STUB_MEMBERS = [
+  { id: uuid(801), email: 'owner@brand.kr', name: 'Brand Owner', role: 'admin', addedAt: '2026-01-05T00:00:00Z', owner: true },
+  { id: uuid(802), email: 'ops@brand.kr', name: 'Ops', role: 'editor', addedAt: '2026-02-01T00:00:00Z', owner: false },
+  { id: uuid(803), email: 'viewer@agency.io', name: null, role: 'viewer', addedAt: '2026-03-01T00:00:00Z', owner: false },
+]
+const answer = req => {
+  if (!/answer/.test(Q) || req.type !== 'run' || req.command !== 'project-members') return
+  setTimeout(() => {
+    const projectMembers = { ...local.projectMembers, [req.args.project]: { at: Date.now(), runId: `stub-${Date.now()}`, rows: STUB_MEMBERS } }
+    local.projectMembers = projectMembers
+    listeners.forEach(f => f({ projectMembers: { newValue: projectMembers } }, 'local'))
+  }, 50)
+}
 const area = data => ({ get: async keys => Object.fromEntries([].concat(keys).map(k => [k, data[k]]).filter(([, v]) => v !== undefined)), set: async () => {}, remove: async () => {} })
 window.chrome = {
   runtime: { id: 'abcdefghijklmnopabcdefghijklmnop', getManifest: () => ({ version: '0.1.0' }), openOptionsPage() {}, onMessage: { addListener() {} },
     // Records each request on <html data-sent> so --dump-dom can check what a view asked for.
-    sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); return { ok: true, data: undefined } } },
-  storage: { local: area(local), session: area(session), onChanged: { addListener() {}, removeListener() {} } },
+    sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); answer(req); return { ok: true, data: undefined } } },
+  storage: { local: area(local), session: area(session), onChanged: { addListener: f => listeners.push(f), removeListener() {} } },
   tabs: { create() {} },
 }
 // The drawer uses a closed shadow root; open it here so the mock can click into it.

@@ -1,17 +1,19 @@
 // New project (create-project): like refit-gql add_project, but you choose the owner (create_by, admin), any
 // extra members with roles (hoan@team-mint.io pre-filled, removable), plan, status and end date. One statement,
-// approved in Tabularis. On success it opens the new project.
+// approved in Tabularis. On success it opens the new project. Duplicate (a Projects row) opens it with `from`: name,
+// plan and status from that project, then its owner and members (with their roles) once project-members comes back.
 import { useEffect, useRef, useState } from 'react'
 import { ENV } from '../table'
 import { plural } from '../term'
-import { NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Role, type UserHit, type UserSearch } from '../projects'
+import {
+  NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Members, type Member as ProjectMember, type ProjectRef, type Role, type UserHit, type UserSearch,
+} from '../projects'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { commandState, type Common } from './browse'
 import { WriteConfirm } from './ui'
 import { UserLabel } from '../shared/card'
 import { UserPicker } from './members'
-
 
 const DEFAULT_MEMBER = 'hoan@team-mint.io' // pre-filled member (Hoàn), removable
 const MAX_MEMBERS = 50 // the members param takes at most 50
@@ -20,6 +22,7 @@ const PLAN_OPTIONS = PLANS.map(p => [p, label(p)] as const)
 const STATUS_OPTIONS = PROJECT_STATUSES.map(s => [s, label(s)] as const)
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
 const inAMonth = () => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 1); return isoDay(d) }
+const asHit = (m: ProjectMember): UserHit => ({ id: m.id, email: m.email, name: m.name, memberRole: null })
 
 type Member = { user: UserHit; role: Role }
 
@@ -32,21 +35,38 @@ function Person({ u, children }: { u: UserHit; children?: React.ReactNode }) {
   )
 }
 
-export function NewProjectView({ search, run, ready, exec, onCreated }: { search?: UserSearch; onCreated: (p: { id: string; name: string }) => void } & Common) {
-  const [name, setName] = useState('')
+export function NewProjectView({ from, fromMembers, search, run, ready, exec, onCreated }: {
+  from?: ProjectRef; fromMembers?: Members; search?: UserSearch; onCreated: (p: { id: string; name: string }) => void
+} & Common) {
+  const [name, setName] = useState(from ? `${from.name} (copy)` : '')
   const [owner, setOwner] = useState<UserHit>()
   const [members, setMembers] = useState<Member[]>([])
-  const [plan, setPlan] = useState<(typeof PLANS)[number]>('BASIC')
-  const [status, setStatus] = useState<(typeof PROJECT_STATUSES)[number]>('PAUSED')
-  const [end, setEnd] = useState(inAMonth)
+  const [plan, setPlan] = useState<(typeof PLANS)[number]>(() => PLANS.find(p => p === from?.plan) ?? 'BASIC') // TRIAL -> BASIC
+  const [status, setStatus] = useState<(typeof PROJECT_STATUSES)[number]>(() => PROJECT_STATUSES.find(s => s === from?.status) ?? 'PAUSED')
+  const [end, setEnd] = useState(inAMonth) // ponytail: not copied, project lists don't load end_date
   const [picking, setPicking] = useState<'owner' | 'member'>()
-
   const [defaulted, setDefaulted] = useState(false)
+
+  // Duplicate: fetch the source's members (fresh, for the owner flag), then copy owner + members once that run lands.
+  // Copied roles win over the default member's admin. The worker keeps one pending run (latest wins), so the default
+  // member lookup waits for the copy; anything else that replaces the fetch leaves a Retry on the hint.
+  const membersWhenOpened = useRef(fromMembers?.runId)
+  const [copied, setCopied] = useState(!from)
+  const fetchMembers = () => from && exec('project-members', { env: ENV, project: from.id })
+  useEffect(() => { if (ready) fetchMembers() }, [ready])
+  useEffect(() => {
+    if (copied || !fromMembers || fromMembers.runId === membersWhenOpened.current) return
+    setCopied(true)
+    const o = fromMembers.rows.find(m => m.owner)
+    if (o) setOwner(asHit(o))
+    const copy = fromMembers.rows.filter(m => m !== o).map(m => ({ user: asHit(m), role: m.role }))
+    setMembers(ms => [...copy, ...ms.filter(x => !copy.some(c => c.user.id === x.user.id))])
+  }, [fromMembers?.runId])
 
   // Pre-fill the default member: look the email up once, then add the exact match as admin. Only a search newer
   // than the one stored when the view opened counts; if a typed search replaced the lookup, give up quietly.
   const openedWith = useRef(search?.runId)
-  useEffect(() => { if (ready && !defaulted) exec('user-search', { env: ENV, project: NO_PROJECT, q: toHex(DEFAULT_MEMBER) }) }, [ready])
+  useEffect(() => { if (ready && copied && !defaulted) exec('user-search', { env: ENV, project: NO_PROJECT, q: toHex(DEFAULT_MEMBER) }) }, [ready, copied])
   useEffect(() => {
     if (defaulted || !search || search.runId === openedWith.current || search.project !== NO_PROJECT) return
     setDefaulted(true)
@@ -116,7 +136,14 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
               <button className="link-btn" onClick={() => setPicking(undefined)}>Done</button>
             </div>
           : <button className="btn ghost pick-btn" onClick={() => setPicking('member')}><Icon d="plus" size={14} />Add member</button>}
-        {!defaulted && <p className="hint muted">Looking up {DEFAULT_MEMBER}…</p>}
+        {!copied && (
+          <p className="hint muted">
+            Copying members from {from!.name}…{' '}
+            {!commandState(run, 'project-members', { project: from!.id }).mine && <button className="link-btn" onClick={fetchMembers}>Retry</button>}
+          </p>
+        )}
+        {copied && fromMembers?.error && <p className="hint fail-text">Couldn't copy members: {fromMembers.error}</p>}
+        {copied && !defaulted && <p className="hint muted">Looking up {DEFAULT_MEMBER}…</p>}
       </section>
 
       <section className="field">

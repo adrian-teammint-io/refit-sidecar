@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, toHex, fromHex, cleanQuery, toArgs, queryOf,
+  parseProjects, parseMembers, parseProjectConnections, parseConnections, parseFittingRooms, toHex, fromHex, cleanQuery, toArgs, queryOf,
   mergePage, cacheProject, togglePin, refreshPins, pinnedFor, dropStalePages, BATCH, MAX_CACHED_PROJECTS, type Project, type ProjectsQuery,
 } from './projects.ts'
 import { connectionUrl, projectUrl, fittingRoomUrl } from './failed-syncs.ts'
@@ -12,6 +12,13 @@ const sample = (f: string) => readFileSync(new URL(`./samples/${f}`, import.meta
 const projects = parseProjects(sample('projects.stdout.txt'))
 assert.equal(projects.length, 5)
 assert.deepEqual(projects[1], { id: 'af486ea5-cfba-479f-8b68-b3cabf51e611', name: '(테스트)E2E 프로젝트 TRIAL', status: 'ACTIVE', plan: 'TRIAL', connections: 0, failed: 0, lastSync: null })
+
+// project-members: owner (0/1, the project's create_by) reads as a boolean
+const members = parseMembers(JSON.stringify({
+  columns: ['id', 'email', 'name', 'role', 'added_at', 'owner'],
+  rows: [['u1', 'a@x.io', 'A', 'admin', '2026-01-01T00:00:00Z', 1], ['u2', 'b@x.io', null, 'viewer', '2026-01-02T00:00:00Z', 0]],
+}))
+assert.deepEqual(members.map(m => [m.id, m.owner, m.name]), [['u1', true, 'A'], ['u2', false, null]])
 
 const conns = parseProjectConnections(sample('project-connections.stdout.txt'))
 assert.equal(conns.length, 5)

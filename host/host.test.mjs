@@ -85,6 +85,9 @@ assert.throws(() => bindParams(cp, { ...cpOk, members: `${Q}:admin:x` }), /uuid:
 assert.throws(() => checkQuery('sql/create-project.sql', bindParams(cp, cpOk).replace("'ENTERPRISE'", "'ENTERPRISE' OR true")), /approved/)
 assert.throws(() => checkQuery('sql/create-project.sql', bindParams(cp, cpOk).replace("'admin')", "'admin'), ((SELECT id FROM refit_user LIMIT 1), 'admin')")), /approved/)
 assert.throws(() => checkQuery('sql/projects.sql', bindParams(cp, cpOk)), /only a single SELECT/)
+// project-members (with the owner flag from project.create_by) binds and stays a plain read
+const pm = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/project-members.sql'), 'utf8'))
+assert.equal(checkQuery('sql/project-members.sql', bindParams(pm, { project_id: P })), false)
 assert.deepEqual(Object.keys(CONNECTIONS), ['prod', 'stag'])
 for (const [name, spec] of Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, 'commands.json'), 'utf8')).commands)) {
   assert.equal(spec.params.env?.pattern, 'prod|stag', `${name} takes env`)

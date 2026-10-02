@@ -15,7 +15,9 @@ import { ConnectionList, SelectToggle } from './connections'
 const STATUSES = [['all', 'All'], ['ACTIVE', 'Active'], ['PAUSED', 'Paused']] as const
 const PROJECT_SORTS = [['active', 'Active first'], ['name', 'Name'], ['recent', 'Recent sync']] as const
 
-function ProjectRow({ p, now, pinned, onOpen, onPin }: { p: Project; now: number; pinned: boolean; onOpen: () => void; onPin: () => void }) {
+function ProjectRow({ p, now, pinned, onOpen, onPin, onDuplicate }: {
+  p: Project; now: number; pinned: boolean; onOpen: () => void; onPin: () => void; onDuplicate: () => void
+}) {
   return (
     <li className="proj-row">
       <button className="proj" onClick={onOpen} data-paused={p.status === 'PAUSED'}>
@@ -28,6 +30,9 @@ function ProjectRow({ p, now, pinned, onOpen, onPin }: { p: Project; now: number
         {p.status === 'PAUSED' && <span className="badge muted-badge">PAUSED</span>}
         <Icon d="chevron" />
       </button>
+      <button className="icon-btn sm pin" aria-label={`Duplicate ${p.name}`} title="Duplicate: new project with the same members" onClick={onDuplicate}>
+        <Icon d="copy" size={14} />
+      </button>
       <button className="icon-btn sm pin" aria-pressed={pinned} aria-label={pinned ? `Unpin ${p.name}` : `Pin ${p.name}`} title={pinned ? 'Unpin' : 'Pin to top'} onClick={onPin}>
         <Icon d="pin" size={14} />
       </button>
@@ -35,14 +40,14 @@ function ProjectRow({ p, now, pinned, onOpen, onPin }: { p: Project; now: number
   )
 }
 
-export function ProjectsView({ projects, pins, query, setQuery, openProject, pin, ...c }: {
+export function ProjectsView({ projects, pins, query, setQuery, openProject, pin, duplicate, ...c }: {
   projects?: Projects; pins?: Pins; query: ProjectsQuery; setQuery: (q: ProjectsQuery) => void
-  openProject: (p: ProjectRef) => void; pin: (p: Project) => void
+  openProject: (p: ProjectRef) => void; pin: (p: Project) => void; duplicate: (p: Project) => void
 } & Common) {
   const b = useBrowse({ page: projects, query, command: 'projects', ...c })
   const pinned = pinnedFor(pins ?? {}, query.q, query.status)
   const pinnedIds = new Set(Object.keys(pins ?? {}))
-  const row = (p: Project) => <ProjectRow key={p.id} p={p} now={c.now} pinned={pinnedIds.has(p.id)} onOpen={() => openProject(p)} onPin={() => pin(p)} />
+  const row = (p: Project) => <ProjectRow key={p.id} p={p} now={c.now} pinned={pinnedIds.has(p.id)} onOpen={() => openProject(p)} onPin={() => pin(p)} onDuplicate={() => duplicate(p)} />
   return (
     <div className="pane">
       <Browse page={projects} b={b} run={c.run} now={c.now} command="projects" cancel={c.cancel}

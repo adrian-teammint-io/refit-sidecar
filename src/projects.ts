@@ -103,14 +103,15 @@ export const PROJECT_STATUSES = ['PAUSED', 'ACTIVE', 'NEED_PAYMENT'] as const //
 // which matches no project, so memberRole is null. A project-free search command if this ever needs to differ.
 export const NO_PROJECT = '00000000-0000-0000-0000-000000000000'
 export type Role = (typeof ROLES)[number]
-export type Member = { id: string; email: string; name: string | null; role: Role; addedAt: string }
+export type Member = { id: string; email: string; name: string | null; role: Role; addedAt: string; owner?: boolean } // owner: the project's create_by (absent in pages cached before it existed)
 export type UserHit = { id: string; email: string; name: string | null; memberRole: Role | null } // memberRole: already in the project
 export type Members = { at: number; runId: string; rows: Member[]; error?: string }
 export type ProjectMembers = Record<string, Members> // by project id
 export type UserSearch = { at: number; runId: string; project: string; q: string; rows: UserHit[]; error?: string }
 
 export function parseMembers(stdout: string): Member[] {
-  return parseTable(stdout, { cols: { id: 'id', email: 'email', name: 'name', role: 'role', addedAt: 'added_at' }, nullable: ['name'] }).rows as Member[]
+  const { rows } = parseTable(stdout, { cols: { id: 'id', email: 'email', name: 'name', role: 'role', addedAt: 'added_at', owner: 'owner' }, nullable: ['name'], numbers: ['owner'] })
+  return rows.map(r => ({ ...r, owner: r.owner === 1 })) as Member[]
 }
 
 export function parseUserHits(stdout: string): UserHit[] {

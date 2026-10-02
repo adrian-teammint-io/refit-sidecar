@@ -8,27 +8,15 @@ import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
 import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
-import { SettingsView } from './Settings'
-import { FailedView } from './failed'
-import { NewProjectView } from './new-project'
-import { Home, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type HomeTarget } from './views'
+import { defOf, titleOf, type Ctx, type ProjectRef, type View } from './routes'
 import { useResize } from './resize'
 
-// A stack of views: Home lists the commands, each command opens its own view, Back pops.
-type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
-type View =
-  | { kind: 'home' }
-  | { kind: 'failed'; conn?: { id: string; name: string } } // conn: only that connection's failures
-  | { kind: 'projects' }
-  | { kind: 'connections' }
-  | { kind: 'fitting' }
-  | { kind: 'new-project' }
-  | { kind: 'project'; project: ProjectRef }
-  | { kind: 'settings' }
-
-const TITLES: Record<View['kind'], string> = {
-  home: 'Refit Sidecar', failed: 'Sync requests', projects: 'Projects', connections: 'Connections', fitting: 'Fitting rooms',
-  'new-project': 'New project', project: '', settings: 'Settings',
+// Search state for a browse view, kept here so Back keeps what you typed. Seeded once from the stored page's query.
+function useQuery<Q>(initial: Q, stored: Q | undefined, loaded: boolean) {
+  const [q, setQ] = useState(initial)
+  const seeded = useRef(false)
+  useEffect(() => { if (loaded && !seeded.current) { seeded.current = true; if (stored) setQ(stored) } }, [loaded])
+  return [q, setQ] as [Q, (v: Q) => void]
 }
 
 // A render error in one view shows here instead of unmounting the whole drawer (and launcher). Keyed by view, so Back clears it.
@@ -47,22 +35,15 @@ class ViewBoundary extends Component<{ children: ReactNode }, { error?: Error }>
 
 export function App() {
   const store = useStore()
-  const { settings, host, run, failedSyncs: fs, projects, projectConnections, connections, fittingRooms, pins, projectMembers, userSearch, syncRequests, loaded } = store
+  const { settings, host, run, failedSyncs: fs, projects, connections, fittingRooms, pins, syncRequests, loaded } = store
   const keys = keysOf(settings.keys)
   const [open, setOpen] = useState(false)
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
-  // Search state lives here so Back keeps what you typed. Initialised from the stored page when there is one.
-  const [projectsQuery, setProjectsQuery] = useState<ProjectsQuery>({ q: '', status: 'all', sort: 'active' })
-  const [connQuery, setConnQuery] = useState({ q: '' })
-  const [fitQuery, setFitQuery] = useState({ q: '' })
-  const seeded = useRef(false)
-  useEffect(() => {
-    if (!loaded || seeded.current) return
-    seeded.current = true
-    if (projects?.query) setProjectsQuery(projects.query)
-    if (connections?.query) setConnQuery(connections.query)
-    if (fittingRooms?.query) setFitQuery(fittingRooms.query)
-  }, [loaded])
+  const queries = {
+    projects: useQuery<ProjectsQuery>({ q: '', status: 'all', sort: 'active' }, projects?.query, loaded),
+    connections: useQuery({ q: '' }, connections?.query, loaded),
+    fitting: useQuery({ q: '' }, fittingRooms?.query, loaded),
+  }
   const [toast, setToast] = useState('')
   const startedHere = useRef<string>(undefined) // run id started from this tab, for the "done" toast
   const running = isRunning(run)
@@ -116,23 +97,15 @@ export function App() {
   }
   const cancel = () => call({ type: 'cancel' }).catch(e => flash((e as Error).message))
 
-  const common = { run, now, ready, exec, cancel }
-  let body: ReactNode = null
-  if (!loaded) body = null
-  else if (view.kind === 'settings') body = <SettingsView settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} />
-  else if (hostProblem(host)) body = <HostSetup host={host} />
-  else if (view.kind === 'home') body = <Home pins={pins} failedSyncs={fs} now={now} open={(k: HomeTarget) => push({ kind: k })} openProject={openProject} />
-  else if (view.kind === 'failed') body = <FailedView key={view.conn?.id} fs={fs} other={syncRequests} conn={view.conn} {...common} />
-  else if (view.kind === 'projects') body = <ProjectsView projects={projects} pins={pins} query={projectsQuery} setQuery={setProjectsQuery} openProject={openProject} pin={pin} {...common} />
-  else if (view.kind === 'connections') body = <ConnectionsView page={connections} query={connQuery} setQuery={setConnQuery} openProject={openProject} openFailed={openFailed} fs={fs} {...common} />
-  else if (view.kind === 'fitting') body = <FittingRoomsView page={fittingRooms} query={fitQuery} setQuery={setFitQuery} openProject={openProject} {...common} />
-  else if (view.kind === 'new-project') body = <NewProjectView search={userSearch} {...common}
-    onCreated={p => setStack(s => [...s.slice(0, -1), { kind: 'project', project: p }])} />
-  else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections} members={projectMembers} userSearch={userSearch}
-    pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} openFailed={openFailed} fs={fs} {...common} />
-
-  const titleOf = (v: View, i: number) => (v.kind === 'project' ? v.project.name : i === 0 && stack.length > 1 ? 'Home' : TITLES[v.kind])
-  const title = titleOf(view, stack.length - 1)
+  const ctx: Ctx = {
+    store, common: { run, now, ready, exec, cancel }, dark, saveSettings: s => saveSettings(settings, s), queries,
+    push, replace: v => setStack(s => [...s.slice(0, -1), v]), openProject, openFailed, pin,
+  }
+  const def = defOf(view)
+  const body = !loaded ? null : hostProblem(host) && !def.noHost ? <HostSetup host={host} /> : def.render(view, ctx)
+  // The root crumb reads Home; as the current view it's the drawer's name.
+  const crumb = (v: View, i: number) => (i === 0 && stack.length > 1 ? 'Home' : titleOf(v))
+  const title = crumb(view, stack.length - 1)
 
   return (
     <div className={`root ${dark ? 'dark' : 'light'}`} style={vars(settings.theme, dark) as React.CSSProperties}>
@@ -158,14 +131,14 @@ export function App() {
           <nav className="crumbs" aria-label="Breadcrumb">
             {stack.length > 2 && stack.slice(0, -1).map((v, i) => (
               <span key={i} className="crumb">
-                <button onClick={() => setStack(s => s.slice(0, i + 1))} title={titleOf(v, i)}>{titleOf(v, i)}</button>
+                <button onClick={() => setStack(s => s.slice(0, i + 1))} title={crumb(v, i)}>{crumb(v, i)}</button>
                 <Icon d="chevron" size={12} />
               </span>
             ))}
             <h1 title={title} aria-current="page">{title}</h1>
           </nav>
           {ENV === 'stag' && <span className="env-chip" title="staging-app.refit.ai: every command runs on the REFIT_STAG database">STAG</span>}
-          {view.kind === 'projects' && <IconBtn icon="plus" label="New project" onClick={() => push({ kind: 'new-project' })} />}
+          {def.header && <IconBtn icon={def.header.icon} label={def.header.label} onClick={() => push(def.header!.open)} />}
           {view.kind !== 'settings' && <IconBtn icon="gear" label="Settings" onClick={() => push({ kind: 'settings' })} />}
           <IconBtn icon="x" label="Close" onClick={() => setOpen(false)} />
         </header>

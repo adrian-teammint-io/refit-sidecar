@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { splitChunk, flushCarry, pushLines, stripAnsi, duration, ago, runStatus, MAX_LINE_CHARS, type Line } from './term.ts'
+import { splitChunk, flushCarry, pushLines, stripAnsi, duration, ago, plural, runStatus, MAX_LINE_CHARS, type Line } from './term.ts'
+
+assert.equal(plural(1, 'member'), '1 member')
+assert.equal(plural(0, 'failed sync'), '0 failed syncs')
 
 assert.equal(stripAnsi('\x1b[1;31mred\x1b[0m \x1b]8;;http://x\x07link\x1b]8;;\x07 \x1b[2K\x1b[1Gdone'), 'red link done')
 

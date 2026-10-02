@@ -2,14 +2,14 @@
 // (delete-syncs, FAIL tab only: the DELETE only removes FAIL rows), like fish refit-sync_delete. Delete is occasional, so it hides behind a Select mode: cards get a check, a sticky bulk bar holds the count and
 // Delete, and that bar expands in place into the confirm (preview, environment; Tabularis approval is the last gate).
 import { useEffect, useState } from 'react'
-import { ago, runStatus } from '../term'
+import { ago, plural, runStatus } from '../term'
 import { dateRange, SYNC_STATUSES, type FailedSyncs, type SyncRequests, type SyncStatus } from '../failed-syncs'
 import { ENV } from '../table'
 import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
-import { Empty, ErrorBanner, Skeleton, commandState, type Common } from './browse'
+import { Empty, ErrorBanner, RunBar, Skeleton, commandState, type Common } from './browse'
 import { SelectionRow, WriteConfirm, useSelection } from './ui'
 
 
@@ -55,20 +55,13 @@ export function FailedView({ fs: failed, other, conn: focus, run, now, ready, ex
     <div className="pane">
       <Segmented label="Sync request status" value={status} onChange={v => { exit(); setStatus(v) }}
         options={SYNC_STATUSES.map(k => [k, counts[k] ? `${k} ${counts[k]!.rows.length}` : k] as const)} />
-      <div className="runbar">
-        <span className="muted">
-          {deleting ? `Deleting on ${ENV_NAME}… approve it in Tabularis` : mine ? `Fetching ${status}…`
-            : selecting ? 'Pick the failures to delete' : fs?.at ? `${n} ${what} · updated ${ago(fs.at, now)}` : 'Not fetched yet'}
-        </span>
-        <span className="spacer" />
-        {st && !selecting && <span className="pill" data-tone={st.tone} title={last?.summary ?? st.label}>{last?.summary ?? st.label}</span>}
-        {mine || deleting ? <button className="btn ghost sm" onClick={cancel}><Icon d="stop" size={13} />Cancel</button>
-          : selecting ? <button className="btn ghost sm" onClick={exit}>Done</button>
-          : <>
-              {!!n && status === 'FAIL' && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
-              <button className="btn primary sm" onClick={load} data-refetch><Icon d="refresh" size={13} />{fs ? 'Refetch' : 'Fetch'}</button>
-            </>}
-      </div>
+      <RunBar running={mine || deleting} onCancel={cancel}
+        text={deleting ? `Deleting on ${ENV_NAME}… approve it in Tabularis` : mine ? `Fetching ${status}…`
+          : selecting ? 'Pick the failures to delete' : fs?.at ? `${n} ${what} · updated ${ago(fs.at, now)}` : 'Not fetched yet'}
+        pill={st && !selecting ? { label: last?.summary ?? st.label, tone: st.tone } : undefined}
+        tools={selecting ? <button className="btn ghost sm" onClick={exit}>Done</button>
+          : !!n && status === 'FAIL' && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
+        refresh={!selecting && <button className="btn primary sm" onClick={load} data-refetch><Icon d="refresh" size={13} />{fs ? 'Refetch' : 'Fetch'}</button>} />
       <ErrorBanner error={fs?.error} hasRows={!!n} />
       {conn && (
         <div className="list-tools">
@@ -108,7 +101,7 @@ function Confirm({ rows, busy, deleting, onCancel, onDelete }: {
 }) {
   const tooMany = rows.length > MAX_DELETE
   return (
-    <WriteConfirm title={<strong>Delete {rows.length} failed sync{rows.length === 1 ? '' : 's'}?</strong>} waiting={deleting} busy={busy} autoFocus
+    <WriteConfirm title={<strong>Delete {plural(rows.length, 'failed sync')}?</strong>} waiting={deleting} busy={busy} autoFocus
       preview={
         <ul className="bulk-rows">
           {rows.slice(0, 5).map(r => (

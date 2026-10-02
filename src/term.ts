@@ -42,6 +42,9 @@ export function duration(ms: number) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
 
+// "1 member", "3 members"
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 export function ago(t: number, now: number) {
   const m = Math.floor((now - t) / 60000)
   return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 48 * 60 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`

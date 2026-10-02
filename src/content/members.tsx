@@ -1,7 +1,7 @@
 // A project's members (project-members) and Add user (user-search + add-project-user), like refit-app-2's admin
 // ProjectMembersModal. Only existing refit_user rows can be added; someone already in the project is never changed.
 import { useEffect, useRef, useState } from 'react'
-import { ago } from '../term'
+import { ago, plural } from '../term'
 import { ENV } from '../table'
 import { ROLES, cleanQuery, toHex, type Members, type Role, type UserHit, type UserSearch } from '../projects'
 import { Icon } from '../shared/icons'
@@ -26,7 +26,7 @@ export function MembersPanel({ projectId, projectName, members, search, ...c }: 
   return (
     <div className="members" onKeyDown={e => { if (e.key === 'Escape' && adding) { e.stopPropagation(); setAdding(false) } }}>
       <StatusLine run={c.run} now={c.now} command="project-members" extra={extra} loading={loading} onRefresh={load} onCancel={c.cancel}
-        meta={members?.at ? `${n} member${n === 1 ? '' : 's'} · updated ${ago(members.at, c.now)}` : ''} />
+        meta={members?.at ? `${plural(n, 'member')} · updated ${ago(members.at, c.now)}` : ''} />
       {adding
         ? <AddUser projectId={projectId} projectName={projectName} search={search} onClose={() => setAdding(false)} {...c} />
         : <button className="btn ghost add-user" onClick={() => setAdding(true)}><Icon d="plus" size={14} />Add user</button>}
@@ -70,7 +70,7 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
           <button className="link-btn" onClick={() => setPicked(undefined)} disabled={saving}>Change</button>
         </div>
         <Segmented label="Role" value={role} options={ROLE_OPTIONS} onChange={setRole} />
-        <WriteConfirm waiting={saving} busy={busy} typeWord={picked.email.split('@')[0]} autoFocus
+        <WriteConfirm waiting={saving} busy={busy} autoFocus
           title={<span className="add-confirm">Add <b>{picked.email}</b> to <b>{projectName}</b> as <b>{role}</b>?</span>}
           note="Approve it in Tabularis when asked. If they are already a member, nothing changes."
           action={{ label: <><Icon d="plus" size={13} />Add as {role}</>, disabled: !!picked.memberRole,

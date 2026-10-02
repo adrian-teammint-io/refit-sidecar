@@ -2,7 +2,7 @@ import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { actionFor, keyLabel, keysOf } from '../keybinds'
-import { runStatus } from '../term'
+import { plural, runStatus } from '../term'
 import { togglePin, type Project, type ProjectRef, type ProjectsQuery } from '../projects'
 import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
@@ -74,7 +74,7 @@ export function App() {
     else if (run.command === 'failed-syncs') {
       const status = run.args?.sync_status
       const k = status === 'IN_PROGRESS' || status === 'FRAGMENTED' ? syncRequests?.[status]?.rows.length ?? 0 : n
-      flash(`${k} ${status === 'IN_PROGRESS' ? 'in progress' : status === 'FRAGMENTED' ? 'fragmented' : 'failed'} sync${k === 1 ? '' : 's'}`)
+      flash(plural(k, `${status === 'IN_PROGRESS' ? 'in progress' : status === 'FRAGMENTED' ? 'fragmented' : 'failed'} sync`))
     }
   }, [run?.endedAt])
 

@@ -6,7 +6,7 @@ import './popup.css'
 import { call } from '../api'
 import { vars } from '../themes'
 import { actionFor, keyLabel, keysOf } from '../keybinds'
-import { ago, runStatus } from '../term'
+import { ago, plural, runStatus } from '../term'
 import { APP } from '../failed-syncs'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
@@ -75,7 +75,7 @@ function Popup() {
             <div>
               <p className="eyebrow">Failed sync requests · prod</p>
               <strong className="p-num">{fs ? n : '–'}{fs && !n && <Icon d="check" size={22} />}</strong>
-              {!!n && <p className="p-where muted">in {projects} project{projects === 1 ? '' : 's'} · newest {ago(newest, now)}</p>}
+              {!!n && <p className="p-where muted">in {plural(projects, 'project')} · newest {ago(newest, now)}</p>}
             </div>
             <div className="p-count-side">
               {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}

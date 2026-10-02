@@ -66,16 +66,25 @@ export function StatusLine({ run, now, command, extra, loading, meta, tools, onR
   run?: Run; now: number; command: Command; extra?: Args; loading: boolean; meta: string; tools?: ReactNode; onRefresh: () => void; onCancel: () => void
 }) {
   const { mine, busy, last, ok } = commandState(run, command, extra)
-  const st = last && !ok ? runStatus(last, now) : undefined
+  return (
+    <RunBar text={mine ? (loading ? 'Searching…' : 'Loading more…') : busy ? `Queued after ${busy}` : meta}
+      pill={last && !ok ? runStatus(last, now) : undefined} tools={tools} running={mine} onCancel={onCancel}
+      refresh={<button className="icon-btn sm" onClick={onRefresh} aria-label="Refresh" title="Refresh" data-refetch><Icon d="refresh" size={14} /></button>} />
+  )
+}
+
+// The status row above a list: what's happening, a run-status pill, the view's tools, then Cancel while its command
+// runs, else its refresh control (absent: nothing to refresh right now).
+export function RunBar({ text, pill, tools, running, onCancel, refresh }: {
+  text: ReactNode; pill?: { label: string; tone: string }; tools?: ReactNode; running: boolean; onCancel: () => void; refresh?: ReactNode
+}) {
   return (
     <div className="runbar">
-      <span className="muted">{mine ? (loading ? 'Searching…' : 'Loading more…') : busy ? `Queued after ${busy}` : meta}</span>
+      <span className="muted">{text}</span>
       <span className="spacer" />
-      {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
+      {pill && <span className="pill" data-tone={pill.tone} title={pill.label}>{pill.label}</span>}
       {tools}
-      {mine
-        ? <button className="btn ghost sm" onClick={onCancel}><Icon d="stop" size={13} />Cancel</button>
-        : <button className="icon-btn sm" onClick={onRefresh} aria-label="Refresh" title="Refresh" data-refetch><Icon d="refresh" size={14} /></button>}
+      {running ? <button className="btn ghost sm" onClick={onCancel}><Icon d="stop" size={13} />Cancel</button> : refresh}
     </div>
   )
 }

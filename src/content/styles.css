@@ -236,13 +236,7 @@
 .bulk-rows .mono { font-size: 10.5px; }
 .bulk-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bulk-note { font-size: 11.5px; }
-.bulk-type { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.bulk-type b { color: var(--text); }
-.bulk-type input {
-  width: 60px; height: 30px; padding: 0 8px; border-radius: 9px; text-align: center; font: 500 13px var(--mono); color: var(--text);
-  background: var(--bg); border: 1px solid var(--line-strong); outline: none; transition: border-color 150ms ease, box-shadow 150ms ease;
-}
-.bulk-type input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px color-mix(in oklab, #dc2626 22%, transparent); }
+
 
 /* Project members + Add user */
 .members { display: flex; flex-direction: column; gap: 10px; }
@@ -280,7 +274,7 @@
 .add-confirm { font-size: 12.5px; }
 .add-confirm b { font-weight: 600; overflow-wrap: anywhere; }
 
-.add-panel .bulk-type input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
 
 /* New project form */
 .np { gap: 16px; }

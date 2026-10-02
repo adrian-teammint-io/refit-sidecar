@@ -3,6 +3,7 @@
 // approved in Tabularis. On success it opens the new project.
 import { useEffect, useRef, useState } from 'react'
 import { ENV } from '../table'
+import { plural } from '../term'
 import { NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Role, type UserHit, type UserSearch } from '../projects'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
@@ -135,10 +136,10 @@ export function NewProjectView({ search, run, ready, exec, onCreated }: { search
       </section>
 
       <div className="bulk np-confirm" data-open="true">
-        <WriteConfirm waiting={creating} busy={busy} typeWord={problems.length ? undefined : trimmed} typeLabel="Type the name"
+        <WriteConfirm waiting={creating} busy={busy}
           title={<strong>{trimmed ? `Create "${trimmed}"` : 'Create project'}</strong>}
           note={problems.length ? problems.join(' ')
-            : `${plan} · ${status} · ends ${end} · owner ${owner!.email} + ${extras.length} member${extras.length === 1 ? '' : 's'}. Approve it in Tabularis when asked.`}
+            : `${plan} · ${status} · ends ${end} · owner ${owner!.email} + ${plural(extras.length, 'member')}. Approve it in Tabularis when asked.`}
           action={{ label: <><Icon d="plus" size={13} />Create project</>, disabled: !!problems.length, onClick: create }} />
       </div>
     </div>

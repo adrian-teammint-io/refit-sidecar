@@ -1,4 +1,5 @@
 import { connect, startRun, cancelRun, closeOrphanRun } from './host'
+import { plural } from './term'
 import { MAX_TABS, type HostState, type Req } from './api'
 import type { FailedSyncs } from './failed-syncs'
 import { DEFAULTS, type Settings } from './themes'
@@ -58,7 +59,7 @@ async function paint() {
   await chrome.action.setBadgeText({ text: '' }) // older versions painted a badge; the icon carries the count now
   await chrome.action.setIcon(!on || (!hostBad && !n) ? { path: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' } }
     : { imageData: countIcon(hostBad ? '!' : n > 99 ? '99+' : String(n), hostBad ? '#d97706' : '#dc2626') })
-  await chrome.action.setTitle({ title: hostBad ? 'Refit Sidecar: host not installed' : host?.state === 'offline' ? 'Refit Sidecar: run pnpm server in a terminal' : `Refit Sidecar: ${n} failed sync${n === 1 ? '' : 's'}` })
+  await chrome.action.setTitle({ title: hostBad ? 'Refit Sidecar: host not installed' : host?.state === 'offline' ? 'Refit Sidecar: run pnpm server in a terminal' : `Refit Sidecar: ${plural(n, 'failed sync')}` })
 }
 
 chrome.storage.onChanged.addListener(c => { if (c.failedSyncs || c.host || c.settings) paint() })

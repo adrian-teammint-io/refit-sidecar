@@ -2,7 +2,7 @@
 // `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
 // They read `host` / `output` (storage.session) and `run` plus each command's result key (storage.local).
 import type { Args, Command, HostState, Output, Run } from './api'
-import { flushCarry, pushLines, splitChunk, type Line } from './term'
+import { flushCarry, plural, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs, type SyncRequests } from './failed-syncs'
 import { DATA_KEYS, envKey } from './table'
 import {
@@ -182,7 +182,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
       gone = (t.rows ?? []).map(r => String(r[0]).toLowerCase())
       affected = gone.length || (t.affected_rows ?? 0)
     } catch { return { summary: 'Delete finished; could not read the result', then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } } }
-    const summary = `Deleted ${affected} of ${asked.length} sync request${asked.length === 1 ? '' : 's'}`
+    const summary = `Deleted ${affected} of ${plural(asked.length, 'sync request')}`
     // RETURNING id lists exactly what went; drop those rows. Without it, re-fetch rather than guess.
     if (!gone.length) return { summary, then: { command: 'failed-syncs', args: { env: env ?? 'prod' } } }
     if (s.failedSyncs) await save({ failedSyncs: { ...s.failedSyncs, rows: s.failedSyncs.rows.filter(r => !gone.includes(r.id.toLowerCase())) } })
@@ -217,7 +217,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
       const members = rows.length
       if (typeof id !== 'string') return { summary: 'Create finished; no project id came back. Check the pnpm server terminal.' }
       const name = fromHex(run.args?.name ?? '')
-      return { summary: `Created ${name} with ${members} member${members === 1 ? '' : 's'}`, result: { projectId: id, name } }
+      return { summary: `Created ${name} with ${plural(members, 'member')}`, result: { projectId: id, name } }
     } catch { return { summary: 'Create finished; could not read the result. Check the pnpm server terminal.' } }
   }
   if (run.command === 'failed-syncs') {

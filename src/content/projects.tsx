@@ -1,6 +1,6 @@
 // Projects (search, filters, pins) and one project's view: its Connections and Members tabs.
 import { useState } from 'react'
-import { ago } from '../term'
+import { ago, plural } from '../term'
 import { projectUrl, type FailedSyncs } from '../failed-syncs'
 import {
   pinnedFor, type Project, type ProjectRef, type Pins, type Projects, type ProjectConnections, type ProjectsQuery, type ConnectionsQuery,
@@ -21,7 +21,7 @@ function ProjectRow({ p, now, pinned, onOpen, onPin }: { p: Project; now: number
       <button className="proj" onClick={onOpen} data-paused={p.status === 'PAUSED'}>
         <span className="proj-main">
           <strong title={p.name}>{p.name}</strong>
-          <span className="muted mono">{p.connections} conn{p.connections === 1 ? '' : 's'} · {p.lastSync ? `synced ${ago(Date.parse(p.lastSync), now)}` : 'never synced'}</span>
+          <span className="muted mono">{plural(p.connections, 'conn')} · {p.lastSync ? `synced ${ago(Date.parse(p.lastSync), now)}` : 'never synced'}</span>
         </span>
         {p.failed > 0 && <span className="count-chip" title={`${p.failed} FAIL sync_requests`}>{p.failed}</span>}
         {p.plan && <span className="badge">{p.plan}</span>}

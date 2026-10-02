@@ -24,14 +24,14 @@ Surfaces:
    - **Projects**: server-side search (debounced 300ms), a status filter, and a sort (Active first / Name / Recent sync). Pinned projects matching the search are listed first. Click the pin icon to pin or unpin. The header's **+** opens **New project** (`content/new-project.tsx`):
      - name, owner (picked from existing users), members with a role each (hoan@team-mint.io is looked up and pre-filled as admin, removable), plan, status and end date (default one month out)
      - warns when ACTIVE has an end date of today or earlier (billing / expiry picks it up)
-     - a PROD/STAG confirm at the bottom; on prod you type the project name. On success the view is replaced by the new project's view.
+     - a PROD/STAG confirm at the bottom (no typing; Tabularis approval is the last gate). On success the view is replaced by the new project's view.
      - `user-search` outside a project passes `NO_PROJECT` (the nil UUID), so nobody shows as an existing member.
 
      Clicking a project pushes:
    - **Project**: pin, **Open in Refit** (`app.refit.ai/<project id>`), then a Connections | Members switch.
      - Connections: search and sort (Failing first / Service / Name). Sort by service adds a header per platform. Cached per project. A card's **N FAIL total** link opens Sync requests filtered to that connection.
      - Header **N FAIL** chip: counted from the Sync requests FAIL list when that's loaded, complete and error-free, else the cached project row.
-     - Members (`content/members.tsx`): the member list (auto-loads once, refresh in the status line), and **Add user**: search existing users by email or name (debounced), pick one (members are shown as `member · role` and can't be picked), choose a role (Viewer default), then confirm with a PROD/STAG tag. On prod you type the email's part before `@` to enable Add. After it finishes, the toast says "Added as viewer" or "Already a member; nothing changed", the form closes and the list reloads. Esc closes the form first. There's no Refit page to link to: the app's member UI is a modal under `/admin/projects` with no URL.
+     - Members (`content/members.tsx`): the member list (auto-loads once, refresh in the status line), and **Add user**: search existing users by email or name (debounced), pick one (members are shown as `member · role` and can't be picked), choose a role (Viewer default), then confirm with a PROD/STAG tag (no typing; Tabularis approval is the last gate). After it finishes, the toast says "Added as viewer" or "Already a member; nothing changed", the form closes and the list reloads. Esc closes the form first. There's no Refit page to link to: the app's member UI is a modal under `/admin/projects` with no URL.
    - **Connections** / **Fitting rooms**: search everything. Each card links to Refit, and its project name opens that project's view.
    - **Connection cards** (project Connections tab and Connections search) take their FAIL count and reason box from `liveFails()` (`failed-syncs.ts`): when the Sync requests FAIL list is newer than the card's page (a refetch, or a delete dropping rows), its rows for that connection win, and FAILs a later SUCCESS covers are counted but show no reason; otherwise the page's values, with the reason only while the newest sync is FAIL (a resolved row can keep its old reason text). A truncated list can't prove "none", so then the page wins. The status pill always comes from the page.
    - They also have the same **Select** mode as Sync requests (the **Select** / **Done** toggle sits in the status line through `StatusLine`'s `tools` slot, next to Refresh / Cancel; the panel owns `selecting`), but the bulk bar's action is **Open N in Refit**: the worker opens each connection page in a background tab (`openTabs` in `background.ts`, at most `MAX_TABS` = 10, only URLs shaped like `connectionUrl()`). Deleting happens there, in Refit's own dialog. There's deliberately no connection delete in the drawer: refit-gql `delete_connection` (`db/api.py:1158-1256`) refuses if a fitting room uses the connection, deletes seed_data / data_source / column_definition(_action) / connection / column_selection / service_connection in order, and `DROP`s the seed view and the `{service}."{id}"` data table. A plain `DELETE FROM connection` fails on the RESTRICT FK from column_definition_action, or leaves those behind. If a real Delete button is wanted later, the proposed route is calling Refit's own `deleteServiceConnection` mutation with the logged-in user's session (Refit then does every check and cleanup). Not built: it means reading the user's token from the page, which breaks the "reads nothing from the page" rule below, so ask Hoàn first.
@@ -155,7 +155,7 @@ src/
                           cacheProject, pins (togglePin/refreshPins/pinnedFor), ROLES / PLANS / PROJECT_STATUSES, NO_PROJECT
   failed-syncs.ts         FailedSync (+ recovered*), parseFailedSyncs, SYNC_STATUSES / SyncStatus / SyncRequests, liveFails,
                           URL builders connectionUrl / projectUrl / fittingRoomUrl, platform, dateRange
-  term.ts                 ANSI strip, line split/cap, ago(), runStatus() (pill text + tone)
+  term.ts                 ANSI strip, line split/cap, ago(), plural() ("3 members"), runStatus() (pill text + tone)
   keybinds.ts             KEYBINDS (the shortcut mapping list), keysOf, actionFor, rebind, validKey, keyLabel, isTyping
   themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth, keys), DEFAULTS, vars(); shared CSS primitives + sync cards
   shared/
@@ -179,7 +179,8 @@ src/
     members.tsx           MembersPanel (member list), AddUser, UserPicker (shared user search)
     new-project.tsx       NewProjectView (create-project form + confirm)
     browse.tsx            shared list plumbing: Common / Exec / OpenFailed types, commandState (a command's mine / busy / last / ok),
-                          useBrowse (debounced fetch, refresh, loadMore), StatusLine, ErrorBanner, Empty, Skeleton, SearchBox,
+                          useBrowse (debounced fetch, refresh, loadMore), RunBar (status row) + StatusLine (RunBar for a browse
+                          command; Sync requests uses RunBar directly), ErrorBanner, Empty, Skeleton, SearchBox,
                           LoadMore (auto), Browse wrapper, useDebounced
     ui.tsx                shared view pieces: useSelection + SelectionRow (select mode bulk bar), EnvTag, WriteConfirm (every write's confirm)
     resize.ts             useResize (left-edge drag, arrows, double-click reset; MIN/MAX/DEFAULT_WIDTH)
@@ -232,7 +233,7 @@ src/
    - A list from a browse command: `useBrowse` + `<Browse>` (search, status line, error, empty, skeleton, load more come with it), cards with `CardHead` + `stagger` (`shared/card.tsx`).
    - A command's state (running, other command busy, last result): `commandState(run, command, extra)`; don't re-derive it from `run`.
    - Select mode: `useSelection` + `SelectionRow` (`ui.tsx`), whole-card toggle with `pickOnClick`.
-   - A write: end in `WriteConfirm` (`ui.tsx`) inside a `.bulk` / `.add-panel` container; it brings the PROD/STAG tag, Tabularis wait, busy note and typed confirm on prod.
+   - A write: end in `WriteConfirm` (`ui.tsx`) inside a `.bulk` / `.add-panel` container; it brings the PROD/STAG tag, Tabularis wait and busy note. No typed confirm: Tabularis approval is the gate.
    - User rows: `UserLabel`.
 2. Add its kind to `View` and an entry to `VIEWS` in `content/routes.tsx`: `title` (string, or from the view's params), `render(v, ctx)`, optional `header` button. Search state that must survive Back goes in `Ctx.queries` (and `useQuery` in `App.tsx`).
 3. Open it with `ctx.push({ kind })` from a button (a Home row: `CommandRow` in `home.tsx`, and add the kind to `HomeTarget`). Back, Esc, breadcrumbs, the error boundary and the Refetch key (a `data-refetch` control) work without more code.

@@ -1,5 +1,5 @@
 // Fitting rooms search: pipelines across projects, newest edit first.
-import { ago } from '../term'
+import { ago, plural } from '../term'
 import { fittingRoomUrl } from '../failed-syncs'
 import type { FittingRoom, FittingRooms, ProjectRef } from '../projects'
 import { Icon } from '../shared/icons'
@@ -21,13 +21,13 @@ export function FittingRoomsView({ page, query, setQuery, openProject, ...c }: {
               const url = fittingRoomUrl(r)
               return (
                 <li key={r.id} className="sync" style={stagger(i)}>
-                  <CardHead badge={`${r.nodes} node${r.nodes === 1 ? '' : 's'}`} title={r.name}
+                  <CardHead badge={plural(r.nodes, 'node')} title={r.name}
                     link={url ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open fitting room' } : undefined}>
                     {r.notOk > 0 && <span className="pill" data-tone="fail" title="fitdata syncs not in SUCCESS">{r.notOk} not ok</span>}
                   </CardHead>
                   <button className="link-btn" onClick={() => openProject({ id: r.projectId, name: r.project })}><Icon d="folder" size={12} />{r.project}{r.projectStatus === 'PAUSED' && ' · paused'}</button>
                   <p className="sync-meta muted">
-                    edited {ago(Date.parse(r.updatedAt), c.now)} · {r.outputs} output{r.outputs === 1 ? '' : 's'}
+                    edited {ago(Date.parse(r.updatedAt), c.now)} · {plural(r.outputs, 'output')}
                     {r.lastFit && <> · last fitdata {ago(Date.parse(r.lastFit), c.now)}</>}
                   </p>
                 </li>

@@ -8,6 +8,7 @@ import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { commandState } from './browse'
 import { WriteConfirm } from './ui'
+import { UserLabel } from '../shared/card'
 import { UserPicker } from './members'
 import type { Common } from './views'
 
@@ -24,8 +25,7 @@ type Member = { user: UserHit; role: Role }
 function Person({ u, children }: { u: UserHit; children?: React.ReactNode }) {
   return (
     <div className="person">
-      <span className="avatar" aria-hidden>{(u.name || u.email)[0].toUpperCase()}</span>
-      <span className="member-main"><strong title={u.email}>{u.email}</strong><span className="muted">{u.name ?? 'No name'}</span></span>
+      <UserLabel u={u} />
       {children}
     </div>
   )

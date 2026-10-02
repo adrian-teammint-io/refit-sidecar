@@ -14,6 +14,7 @@ import { Segmented } from '../shared/controls'
 import { MembersPanel } from './members'
 import { Browse, Empty, SearchBox, useBrowse, type Exec } from './browse'
 import { SelectionRow, useSelection } from './ui'
+import { CardHead, pickOnClick, stagger } from '../shared/card'
 export type { Exec } from './browse'
 export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
 export type OpenFailed = (c: Pick<ProjectConnection, 'connectionId' | 'name'>) => void
@@ -204,20 +205,16 @@ function ConnectionList({ rows, now, groupBy, openProject, openFailed, fs, pageA
         const expanded = open === c.connectionId
         const header = groupBy && (i === 0 || platform(rows[i - 1]) !== platform(c))
         const on = sel.picked.has(c.connectionId)
-        const pick = selecting && url ? (e: React.MouseEvent) => { if (!(e.target as Element).closest('a, button')) toggle(c.connectionId) } : undefined
+        const canPick = selecting && !!url
         return (
-          <li key={c.connectionId} className="conn-item" style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
+          <li key={c.connectionId} className="conn-item" style={stagger(i)}>
             {header && <p className="eyebrow group-head">{platform(c)}</p>}
-            <div className="sync conn" data-status={c.status ?? 'NEVER'} data-selected={selecting && on} onClick={pick}>
-              <div className="sync-head">
-                {selecting && url && (
-                  <button className="check" role="checkbox" aria-checked={on} aria-label={`Select ${c.name}`} onClick={() => toggle(c.connectionId)}><Icon d="check" size={12} /></button>
-                )}
-                <span className="badge">{platform(c)}</span>
-                <strong title={c.name}>{c.name.trim()}</strong>
+            <div className="sync conn" data-status={c.status ?? 'NEVER'} data-selected={selecting && on} onClick={pickOnClick(canPick, () => toggle(c.connectionId))}>
+              <CardHead badge={platform(c)} title={c.name.trim()}
+                check={canPick ? { on, label: `Select ${c.name}`, onToggle: () => toggle(c.connectionId) } : undefined}
+                link={url && !selecting ? { href: url, label: `Open ${c.name} on Refit`, title: 'Open connection' } : undefined}>
                 <span className="pill" data-tone={c.status ? TONE[c.status] ?? 'none' : 'none'}>{c.status ?? 'never synced'}</span>
-                {url && !selecting && <a className="icon-btn sync-link" href={url} target="_top" aria-label={`Open ${c.name} on Refit`} title="Open connection"><Icon d="external" size={14} /></a>}
-              </div>
+              </CardHead>
               {c.project && openProject && (
                 <button className="link-btn" onClick={() => openProject({ id: c.projectId, name: c.project! })}><Icon d="folder" size={12} />{c.project}</button>
               )}
@@ -287,13 +284,11 @@ export function FittingRoomsView({ page, query, setQuery, openProject, ...c }: {
             {(rows as FittingRoom[]).map((r, i) => {
               const url = fittingRoomUrl(r)
               return (
-                <li key={r.id} className="sync" style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
-                  <div className="sync-head">
-                    <span className="badge">{r.nodes} node{r.nodes === 1 ? '' : 's'}</span>
-                    <strong title={r.name}>{r.name}</strong>
+                <li key={r.id} className="sync" style={stagger(i)}>
+                  <CardHead badge={`${r.nodes} node${r.nodes === 1 ? '' : 's'}`} title={r.name}
+                    link={url ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open fitting room' } : undefined}>
                     {r.notOk > 0 && <span className="pill" data-tone="fail" title="fitdata syncs not in SUCCESS">{r.notOk} not ok</span>}
-                    {url && <a className="icon-btn sync-link" href={url} target="_top" aria-label={`Open ${r.name} in Refit`} title="Open fitting room"><Icon d="external" size={14} /></a>}
-                  </div>
+                  </CardHead>
                   <button className="link-btn" onClick={() => openProject({ id: r.projectId, name: r.project })}><Icon d="folder" size={12} />{r.project}{r.projectStatus === 'PAUSED' && ' · paused'}</button>
                   <p className="sync-meta muted">
                     edited {ago(Date.parse(r.updatedAt), c.now)} · {r.outputs} output{r.outputs === 1 ? '' : 's'}

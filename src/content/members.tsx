@@ -8,6 +8,7 @@ import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, commandState, useDebounced } from './browse'
 import { WriteConfirm } from './ui'
+import { UserLabel, stagger } from '../shared/card'
 import type { Common } from './views'
 
 const ROLE_OPTIONS = ROLES.map(r => [r, r[0].toUpperCase() + r.slice(1)] as const)
@@ -34,9 +35,8 @@ export function MembersPanel({ projectId, projectName, members, search, ...c }: 
         : !n ? <Empty icon="users" title="No members" text="Nobody has access to this project yet." />
         : <ul className="member-list">
             {members.rows.map((m, i) => (
-              <li key={m.id} className="member" style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
-                <span className="avatar" aria-hidden>{(m.name || m.email)[0].toUpperCase()}</span>
-                <span className="member-main"><strong title={m.email}>{m.email}</strong><span className="muted">{m.name ?? 'No name'} · added {ago(Date.parse(m.addedAt), c.now)}</span></span>
+              <li key={m.id} className="member" style={stagger(i)}>
+                <UserLabel u={m} sub={`${m.name ?? 'No name'} · added ${ago(Date.parse(m.addedAt), c.now)}`} />
                 <span className="role" data-role={m.role}>{m.role}</span>
               </li>
             ))}
@@ -66,8 +66,7 @@ function AddUser({ projectId, projectName, search, run, ready, exec, onClose }: 
       {!picked ? <UserPicker projectId={projectId} search={search} run={run} ready={ready} exec={exec} onPick={setPicked} />
       : <>
         <div className="picked">
-          <span className="avatar" aria-hidden>{(picked.name || picked.email)[0].toUpperCase()}</span>
-          <span className="member-main"><strong>{picked.email}</strong><span className="muted">{picked.name ?? 'No name'}</span></span>
+          <UserLabel u={picked} />
           <button className="link-btn" onClick={() => setPicked(undefined)} disabled={saving}>Change</button>
         </div>
         <Segmented label="Role" value={role} options={ROLE_OPTIONS} onChange={setRole} />
@@ -102,8 +101,7 @@ export function UserPicker({ projectId, search, run, ready, exec, onPick, skip, 
             <li key={u.id}>
               <button className="hit" disabled={!!u.memberRole} onClick={() => { onPick(u); setQ('') }}
                 title={u.memberRole ? `Already a member as ${u.memberRole}` : `Pick ${u.email}`}>
-                <span className="avatar" aria-hidden>{(u.name || u.email)[0].toUpperCase()}</span>
-                <span className="member-main"><strong>{u.email}</strong><span className="muted">{u.name ?? 'No name'}</span></span>
+                <UserLabel u={u} />
                 {u.memberRole ? <span className="role" data-role={u.memberRole}>member · {u.memberRole}</span> : <Icon d="plus" size={14} />}
               </button>
             </li>

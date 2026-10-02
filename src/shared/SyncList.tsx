@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { connectionUrl, dateRange, platform, type FailedSync, type SyncStatus } from '../failed-syncs'
 import { ago } from '../term'
 import { Icon } from './icons'
+import { CardHead, pickOnClick, stagger } from './card'
 
 export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting, selected, onToggle }: {
   rows: FailedSync[]; now: number; limit?: number; newTab?: boolean; status?: SyncStatus
@@ -19,26 +20,19 @@ export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting,
         const reason = r.displayReason ?? r.reason ?? (status === 'FAIL' ? 'No reason recorded' : undefined)
         const expanded = open === r.id
         const on = !!selected?.has(r.id)
-        // In select mode the whole card toggles, except its own links and buttons.
-        const pick = selecting && onToggle ? (e: React.MouseEvent) => { if (!(e.target as Element).closest('a, button')) onToggle(r.id) } : undefined
+        const canPick = !!selecting && !!onToggle
         return (
-          <li key={r.id} className="sync" data-selected={selecting && on} onClick={pick} style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
-            <div className="sync-head">
-              {selecting && onToggle && (
-                <button className="check" role="checkbox" aria-checked={on} aria-label={`Select ${r.name} (${r.id.slice(0, 8)})`} onClick={() => onToggle(r.id)}>
-                  <Icon d="check" size={12} />
-                </button>
-              )}
-              <span className="badge">{platform(r)}</span>
-              <strong title={r.name}>{r.name}</strong>
+          <li key={r.id} className="sync" data-selected={selecting && on} onClick={pickOnClick(canPick, () => onToggle!(r.id))} style={stagger(i)}>
+            {/* The popup (newTab) is height-capped and hides the foot, so it keeps the compact icon link in the head. */}
+            <CardHead badge={platform(r)} title={r.name}
+              check={canPick ? { on, label: `Select ${r.name} (${r.id.slice(0, 8)})`, onToggle: () => onToggle!(r.id) } : undefined}
+              link={url && newTab ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open in Refit', newTab } : undefined}>
               {r.recoveredAt && (
                 <span className="ok-chip" title={`A later SUCCESS covers this end date: ${dateRange({ start: r.recoveredStart ?? null, end: r.recoveredEnd ?? null })}, ran ${ago(Date.parse(r.recoveredAt), now)}`}>
                   <Icon d="check" size={11} />Succeeded after
                 </span>
               )}
-              {/* The popup (newTab) is height-capped and hides the foot, so it keeps the compact icon link here. */}
-              {url && newTab && <a className="icon-btn sync-link" href={url} target="_blank" rel="noreferrer" aria-label={`Open ${r.name} in Refit`} title="Open in Refit"><Icon d="external" size={14} /></a>}
-            </div>
+            </CardHead>
             <p className="sync-meta muted"><span title={r.project}>{r.project}</span> · <span className="mono">{r.type}</span> · <span className="mono">{dateRange(r)}</span></p>
             {reason && (
               <button className="sync-reason" data-open={expanded} aria-expanded={expanded} onClick={() => setOpen(expanded ? undefined : r.id)}

@@ -112,7 +112,19 @@ const STUB_MEMBERS = [
   { id: uuid(802), email: 'ops@brand.kr', name: 'Ops', role: 'editor', addedAt: '2026-02-01T00:00:00Z', owner: false },
   { id: uuid(803), email: 'viewer@agency.io', name: null, role: 'viewer', addedAt: '2026-03-01T00:00:00Z', owner: false },
 ]
+// project-schedules answers per asked project: the first gets two schedules (04:00 / Yesterday wins by connections),
+// the rest one each, the last none (it shows "No scheduled connections").
+const scheduleRows = ids => ids.slice(0, -1).flatMap((id, i) => {
+  const p = projectRows.find(r => r.id === id) ?? { id, name: id.slice(0, 8) }
+  const row = (cron, range, connections) => ({ projectId: id, project: p.name, cron, range, connections })
+  return i === 0 ? [row('0 4 * * *', 'DAY', 21), row('0 10 * * *', 'LAST_2DAYS', 3)] : [row('0 10 * * *', 'LAST_2DAYS', 5)]
+})
 const answer = req => {
+  if (/answer/.test(Q) && req.type === 'run' && req.command === 'project-schedules') return setTimeout(() => {
+    const projectSchedules = { at: Date.now(), runId: `stub-${Date.now()}`, projects: req.args.projects, rows: scheduleRows(req.args.projects.split(',')) }
+    local.projectSchedules = projectSchedules
+    listeners.forEach(f => f({ projectSchedules: { newValue: projectSchedules } }, 'local'))
+  }, 50)
   if (!/answer/.test(Q) || req.type !== 'run' || req.command !== 'project-members') return
   setTimeout(() => {
     const projectMembers = { ...local.projectMembers, [req.args.project]: { at: Date.now(), runId: `stub-${Date.now()}`, rows: STUB_MEMBERS } }

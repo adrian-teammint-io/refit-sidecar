@@ -5,6 +5,7 @@ import { call, type HostState, type Output, type Run } from '../api'
 import type { FailedSyncs, SyncRequests } from '../failed-syncs'
 import { dropStalePages, type Projects, type ProjectConnections, type Connections, type FittingRooms, type FittingRoomConnections, type Pins, type ProjectMembers, type UserSearch } from '../projects'
 import type { FittingRoomFlows } from '../flow'
+import type { Schedules } from '../schedule'
 import { DEFAULTS, type Settings } from '../themes'
 import { DATA_KEYS, ENV, envKey } from '../table'
 
@@ -12,7 +13,7 @@ import { DATA_KEYS, ENV, envKey } from '../table'
 export type Data = {
   failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
   connections?: Connections; fittingRooms?: FittingRooms; fittingRoomConnections?: FittingRoomConnections; fittingRoomFlows?: FittingRoomFlows; pins?: Pins; projectMembers?: ProjectMembers; userSearch?: UserSearch
-  syncRequests?: SyncRequests
+  syncRequests?: SyncRequests; projectSchedules?: Schedules
 }
 export type Store = Data & { settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean }
 // Results are per environment (envKey: staging's are stored as "stag.<key>"); settings, run and host are shared.

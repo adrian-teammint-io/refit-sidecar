@@ -99,11 +99,22 @@ export const PARAMS = {
     return `convert_from(decode('${v}', 'hex'), 'UTF8')`
   },
 }
-PARAMS.ids = v => { // sync_request ids to delete: 1-100 comma-separated UUIDs
+// 1-max comma-separated UUIDs, emitted as an IN (…) list
+const UUIDS = max => v => {
   const ids = v.split(',')
-  if (ids.length > 100 || !ids.every(id => UUID.test(id))) throw new Error('must be 1-100 comma-separated UUIDs')
+  if (ids.length > max || !ids.every(id => UUID.test(id))) throw new Error(`must be 1-${max} comma-separated UUIDs`)
   return ids.map(id => `'${id.toLowerCase()}'`).join(', ')
 }
+PARAMS.ids = UUIDS(100) // sync_request ids to delete
+PARAMS.projects = UUIDS(50) // project ids for project-schedules / update-schedules
+// update-schedules: an hour (04-23 KST, the hours Refit's own form offers), emitted as the daily cron refit-gql writes
+// ("0 H * * *": minute 0, every day; the crawler runs in Asia/Seoul time).
+PARAMS.daily_cron = v => {
+  if (!/^(?:[4-9]|1\d|2[0-3])$/.test(v)) throw new Error('must be an hour from 4 to 23')
+  return `'0 ${v} * * *'`
+}
+// sync_schedule_range values: which dates a scheduled sync fetches
+PARAMS.range = ENUM('DAY', 'LAST_2DAYS', 'WEEK', 'MONTH', 'THIS_MONTH', 'THIS_2MONTH')
 
 // Tabularis connections by environment (ids from Tabularis's connections.json: REFIT_ PROD, REFIT_STAG). Commands
 // pass {env}; the drawer picks it from the page's hostname, so a page can only ever choose between these two.
@@ -128,6 +139,7 @@ const shape = sql => new RegExp('^' + sql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 export const WRITES = {
   'sql/create-project.sql': shape(CREATE_PROJECT),
   'sql/delete-syncs.sql': new RegExp(`^delete from sync_request where status = 'FAIL' and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
+  'sql/update-schedules.sql': new RegExp(`^update sync_schedule set cron = '0 (?:[4-9]|1\\d|2[0-3]) \\* \\* \\*', range = '(?:DAY|LAST_2DAYS|WEEK|MONTH|THIS_MONTH|THIS_2MONTH)', skip = false, update_at = now\\(\\) where connection_id in \\(select id from connection where project_id in \\(${U}(?:, ${U})*\\)\\) returning connection_id$`, 'i'),
   'sql/add-project-user.sql': new RegExp(`^insert into refit_user_project_relation \\(user_id, project_id, role\\) values \\(${U}, ${U}, '(?:admin|editor|viewer)'\\) on conflict \\(project_id, user_id\\) do nothing returning user_id, role$`, 'i'),
 }
 

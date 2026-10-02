@@ -13,6 +13,7 @@ import { Home } from './home'
 import { ProjectsView, ProjectView } from './projects'
 import { ConnectionsView } from './connections'
 import { FittingRoomsView, FittingRoomView } from './fitting'
+import { ScheduleView } from './schedule'
 
 export type View =
   | { kind: 'home' }
@@ -23,6 +24,7 @@ export type View =
   | { kind: 'fitting-room'; room: FittingRoom }
   | { kind: 'new-project'; from?: ProjectRef } // from: Duplicate pre-fills the form from this project and its members
   | { kind: 'project'; project: ProjectRef }
+  | { kind: 'schedule'; projects: ProjectRef[] } // Sync schedule for the projects picked in Projects' select mode
   | { kind: 'settings' }
 
 type State<T> = [T, (v: T) => void]
@@ -51,7 +53,8 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
     title: 'Projects',
     header: { icon: 'plus', label: 'New project', open: { kind: 'new-project' } },
     render: (_, x) => <ProjectsView projects={x.store.projects} pins={x.store.pins} query={x.queries.projects[0]} setQuery={x.queries.projects[1]}
-      openProject={x.openProject} pin={x.pin} duplicate={from => x.push({ kind: 'new-project', from })} {...x.common} />,
+      openProject={x.openProject} pin={x.pin} duplicate={from => x.push({ kind: 'new-project', from })}
+      schedule={projects => x.push({ kind: 'schedule', projects: projects.map(p => ({ id: p.id, name: p.name })) })} {...x.common} />,
   },
   project: {
     title: v => v.project.name,
@@ -83,6 +86,10 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
   failed: {
     title: 'Sync requests',
     render: (v, x) => <FailedView key={v.conn?.id} fs={x.store.failedSyncs} other={x.store.syncRequests} conn={v.conn} find={x.find} {...x.common} />,
+  },
+  schedule: {
+    title: 'Sync schedule',
+    render: (v, x) => <ScheduleView key={v.projects.map(p => p.id).join()} projects={v.projects} schedules={x.store.projectSchedules} {...x.common} />,
   },
   settings: {
     title: 'Settings', noHost: true,

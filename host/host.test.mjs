@@ -88,6 +88,23 @@ assert.throws(() => checkQuery('sql/projects.sql', bindParams(cp, cpOk)), /only 
 // project-members (with the owner flag from project.create_by) binds and stays a plain read
 const pm = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/project-members.sql'), 'utf8'))
 assert.equal(checkQuery('sql/project-members.sql', bindParams(pm, { project_id: P })), false)
+// schedules: the read stays a plain read; the write binds to exactly its approved UPDATE and nothing wider
+const ps = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/project-schedules.sql'), 'utf8'))
+assert.equal(checkQuery('sql/project-schedules.sql', bindParams(ps, { projects: `${P},${Q}` })), false)
+const us = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/update-schedules.sql'), 'utf8'))
+const usOk = { projects: `${P},${Q}`, daily_cron: '9', range: 'LAST_2DAYS' }
+const usSql = bindParams(us, usOk)
+assert.match(usSql, /cron = '0 9 \* \* \*', range = 'LAST_2DAYS'/)
+assert.equal(checkQuery('sql/update-schedules.sql', usSql), true)
+assert.equal(checkQuery('sql/update-schedules.sql', bindParams(us, { ...usOk, daily_cron: '23', range: 'DAY' })), true)
+for (const h of ['0', '3', '24', '04', '9 * * * *', '-1']) assert.throws(() => bindParams(us, { ...usOk, daily_cron: h }), /hour from 4 to 23/)
+assert.throws(() => bindParams(us, { ...usOk, range: 'YEAR' }), /range must be one of/)
+assert.throws(() => bindParams(us, { ...usOk, projects: Array(51).fill(P).join(',') }), /1-50/)
+assert.throws(() => bindParams(us, { ...usOk, projects: `${P}) OR (true` }), /projects must be/)
+assert.throws(() => checkQuery('sql/update-schedules.sql', usSql.replace(/WHERE .*RETURNING/, 'RETURNING')), /approved/) // no WHERE: every connection
+assert.throws(() => checkQuery('sql/update-schedules.sql', usSql.replace('project_id IN (', 'project_id NOT IN (')), /approved/)
+assert.throws(() => checkQuery('sql/update-schedules.sql', usSql.replace("'0 9 * * *'", "'*/5 * * * *'")), /approved/)
+assert.throws(() => checkQuery('sql/projects.sql', usSql), /only a single SELECT/)
 // fitting-room-connections binds the room id as a UUID literal and stays a plain read
 const frc = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/fitting-room-connections.sql'), 'utf8'))
 const frcOk = { fitting_room_id: P.toUpperCase(), q: toHex('meta'), sort: 'status', offset: '0' }

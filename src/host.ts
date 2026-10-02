@@ -2,6 +2,7 @@
 // `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
 // They read `host` / `output` (storage.session) and `run` plus each command's result key (storage.local).
 import { parseFlow, type Flow } from './flow'
+import { cronText, parseSchedules, rangeLabel, type Schedules } from './schedule'
 import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, plural, pushLines, runOk, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
@@ -62,7 +63,7 @@ export function connect() {
 // request for the same command supersedes the running one: it is cancelled and its result thrown away, so typing
 // in a search box never waits behind a stale query.
 // A write never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
-const WRITES: Command[] = ['delete-syncs', 'add-project-user', 'create-project']
+const WRITES: Command[] = ['delete-syncs', 'add-project-user', 'create-project', 'update-schedules']
 export function startRun(command: Command, args: Args = {}): string {
   if (current && WRITES.includes(command)) throw new Error(`Busy: wait for ${current.run.command} to finish, then try again`)
   if (current) {
@@ -205,6 +206,13 @@ async function writeResult(run: Run, stdout: string, s: Data, save: Save): Promi
     // ON CONFLICT DO NOTHING: no row back means they were already a member and nothing changed.
     return { summary: added ? `Added as ${run.args?.role ?? 'viewer'}` : 'Already a member; nothing changed', then: reload }
   }
+  if (run.command === 'update-schedules') {
+    const reload = { command: 'project-schedules' as Command, args: { env, projects: run.args?.projects ?? '' } }
+    let n = 0
+    try { n = writeRows(stdout).rows?.length ?? 0 } catch { return { summary: 'Update finished; could not read the result', then: reload } }
+    const to = `${cronText(`0 ${run.args?.hour} * * *`)} · ${rangeLabel(run.args?.range ?? '')}`
+    return { summary: n ? `Updated ${plural(n, 'connection')}: ${to}` : 'No scheduled connections in those projects; nothing changed', then: reload }
+  }
   if (run.command === 'create-project') {
     try {
       // One row (project_id, user_id) per member added; the owner always is, so no row means nothing was created.
@@ -230,6 +238,10 @@ async function readResult(run: Run, stdout: string, s: Data, save: Save): Promis
   if (run.command === 'user-search') {
     const base = { at, runId: run.id, project: run.args?.project ?? '', q: fromHex(run.args?.q ?? '') }
     return save({ userSearch: outcome<UserSearch>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseUserHits(stdout) })) })
+  }
+  if (run.command === 'project-schedules') {
+    const base = { at, runId: run.id, projects: run.args?.projects ?? '' }
+    return save({ projectSchedules: outcome<Schedules>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseSchedules(stdout) })) })
   }
   if (run.command === 'failed-syncs') {
     const status = run.args?.sync_status ?? 'FAIL'

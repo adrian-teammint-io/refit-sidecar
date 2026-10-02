@@ -12,6 +12,7 @@ import type { Args, Command } from '../api'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { MembersPanel } from './members'
+import { SelectionRow, useSelection } from './ui'
 import { OpenInRefit } from '../shared/card'
 import { Browse, Empty, SearchBox, pageCount, useBrowse, type Common, type OpenFailed } from './browse'
 import { ConnectionList, SelectToggle } from './connections'
@@ -19,12 +20,15 @@ import { ConnectionList, SelectToggle } from './connections'
 const STATUSES = [['all', 'All'], ['ACTIVE', 'Active'], ['PAUSED', 'Paused']] as const
 const PROJECT_SORTS = [['active', 'Active first'], ['name', 'Name'], ['recent', 'Recent sync']] as const
 
-function ProjectRow({ p, now, pinned, onOpen, onPin, onDuplicate }: {
+// `check`: select mode (the row toggles instead of opening, and Duplicate / Pin step aside).
+function ProjectRow({ p, now, pinned, onOpen, onPin, onDuplicate, check }: {
   p: Project; now: number; pinned: boolean; onOpen: () => void; onPin: () => void; onDuplicate: () => void
+  check?: { on: boolean; onToggle: () => void }
 }) {
   return (
-    <li className="proj-row">
-      <button className="proj" onClick={onOpen} data-paused={p.status === 'PAUSED'}>
+    <li className="proj-row" data-selected={check?.on}>
+      {check && <button className="check" role="checkbox" aria-checked={check.on} aria-label={`Select ${p.name}`} onClick={check.onToggle}><Icon d="check" size={12} /></button>}
+      <button className="proj" onClick={check ? check.onToggle : onOpen} data-paused={p.status === 'PAUSED'} tabIndex={check ? -1 : undefined}>
         <span className="proj-main">
           <strong title={p.name}>{p.name}</strong>
           <span className="muted mono">{plural(p.connections, 'conn')} · {p.lastSync ? `synced ${ago(Date.parse(p.lastSync), now)}` : 'never synced'}</span>
@@ -32,33 +36,44 @@ function ProjectRow({ p, now, pinned, onOpen, onPin, onDuplicate }: {
         {p.failed > 0 && <span className="count-chip" title={`${p.failed} FAIL sync_requests`}>{p.failed}</span>}
         {p.plan && <span className="badge">{p.plan}</span>}
         {p.status === 'PAUSED' && <span className="badge muted-badge">PAUSED</span>}
-        <Icon d="chevron" />
+        {!check && <Icon d="chevron" />}
       </button>
+      {!check && <>
       <button className="icon-btn sm pin" aria-label={`Duplicate ${p.name}`} title="Duplicate: new project with the same members" onClick={onDuplicate}>
         <Icon d="copy" size={14} />
       </button>
       <button className="icon-btn sm pin" aria-pressed={pinned} aria-label={pinned ? `Unpin ${p.name}` : `Pin ${p.name}`} title={pinned ? 'Unpin' : 'Pin to top'} onClick={onPin}>
         <Icon d="pin" size={14} />
       </button>
+      </>}
     </li>
   )
 }
 
-export function ProjectsView({ projects, pins, query, setQuery, openProject, pin, duplicate, ...c }: {
+export const MAX_SCHEDULE_PROJECTS = 50 // the update-schedules projects param takes at most 50
+
+// Select mode picks projects for Sync schedule (one time + range for all their connections).
+export function ProjectsView({ projects, pins, query, setQuery, openProject, pin, duplicate, schedule, ...c }: {
   projects?: Projects; pins?: Pins; query: ProjectsQuery; setQuery: (q: ProjectsQuery) => void
-  openProject: (p: ProjectRef) => void; pin: (p: Project) => void; duplicate: (p: Project) => void
+  openProject: (p: ProjectRef) => void; pin: (p: Project) => void; duplicate: (p: Project) => void; schedule: (ps: Project[]) => void
 } & Common) {
   const b = useBrowse({ page: projects, query, command: 'projects', ...c })
   const pinned = pinnedFor(pins ?? {}, query.q, query.status)
   const pinnedIds = new Set(Object.keys(pins ?? {}))
-  const row = (p: Project) => <ProjectRow key={p.id} p={p} now={c.now} pinned={pinnedIds.has(p.id)} onOpen={() => openProject(p)} onPin={() => pin(p)} onDuplicate={() => duplicate(p)} />
+  const [selecting, setSelecting] = useState(false)
+  const sel = useSelection(projects?.rows ?? [], p => p.id, MAX_SCHEDULE_PROJECTS)
+  const exit = () => { setSelecting(false); sel.clear() }
+  const row = (p: Project) => <ProjectRow key={p.id} p={p} now={c.now} pinned={pinnedIds.has(p.id)} onOpen={() => openProject(p)} onPin={() => pin(p)} onDuplicate={() => duplicate(p)}
+    check={selecting ? { on: sel.picked.has(p.id), onToggle: () => sel.toggle(p.id) } : undefined} />
   return (
     <div className="pane">
       <Browse page={projects} b={b} run={c.run} now={c.now} command="projects" cancel={c.cancel}
-        meta={projects?.at ? `${pageCount(projects, 'projects')} · updated ${ago(projects.at, c.now)}` : ''}
+        meta={selecting ? 'Pick projects to reschedule' : projects?.at ? `${pageCount(projects, 'projects')} · updated ${ago(projects.at, c.now)}` : ''}
+        tools={selecting ? <button className="btn ghost sm" onClick={exit}>Done</button>
+          : !!projects?.rows.length && <button className="btn ghost sm" onClick={() => setSelecting(true)} title="Pick projects to change their sync schedule"><Icon d="clock" size={13} />Schedule</button>}
         empty={<Empty icon="search" title="No matching projects" text="Try other words, or another status." />}
         rowsFor={rows => <>
-          {!!pinned.length && <><p className="eyebrow">Pinned</p><ul className="proj-list">{pinned.map(row)}</ul><p className="eyebrow">All projects</p></>}
+          {!!pinned.length && !selecting && <><p className="eyebrow">Pinned</p><ul className="proj-list">{pinned.map(row)}</ul><p className="eyebrow">All projects</p></>}
           <ul className="proj-list">{rows.map(row)}</ul>
         </>}>
         <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Search projects by name, id or plan" autoFocus />
@@ -67,6 +82,15 @@ export function ProjectsView({ projects, pins, query, setQuery, openProject, pin
           <Segmented label="Sort" value={query.sort} options={PROJECT_SORTS} onChange={sort => setQuery({ ...query, sort })} />
         </div>
       </Browse>
+      {selecting && (
+        <div className="bulk" role="toolbar" aria-label="Selected projects">
+          <SelectionRow sel={sel}>
+            <button className="btn primary sm" disabled={!sel.selected.length} onClick={() => { schedule(sel.selected); exit() }}>
+              <Icon d="clock" size={13} />Schedule {sel.selected.length || ''}
+            </button>
+          </SelectionRow>
+        </div>
+      )}
     </div>
   )
 }

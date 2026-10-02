@@ -18,6 +18,7 @@ export const ICONS = {
   external: 'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
   copy: 'M9 9h11v11H9ZM5 15H4V4h11v1',
   check: 'M20 6 9 17l-5-5',
+  clock: 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20ZM12 6v6l4 2',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
   plug: 'M12 22v-5M9 8V2M15 8V2M18 8v4a6 6 0 0 1-12 0V8Z',
 }

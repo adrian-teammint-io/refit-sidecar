@@ -354,6 +354,21 @@
 .np .segmented button { height: 28px; font-size: 12px; }
 .np-confirm[data-open='true'] { border-color: var(--line-strong); }
 
+/* Sync schedule (Projects select mode → schedule view) */
+.proj-row .check { margin: 0 4px 0 10px; }
+.proj-row[data-selected='true'] .proj { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+.light .proj-row[data-selected='true'] .proj { background: var(--hover); }
+.sched-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; transition: opacity 150ms ease; }
+.sched-list[data-stale='true'] { opacity: 0.55; }
+.sched-list li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.sched-list strong { font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-line { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.sched-line > span:first-child { flex: 1; min-width: 0; }
+.sched-line .mono { font-size: 10.5px; flex-shrink: 0; }
+.sched-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.sched-form select { cursor: pointer; }
+.sched-form select:disabled { opacity: 0.6; cursor: default; }
+
 /* Loading skeleton */
 .skeleton-list { display: flex; flex-direction: column; gap: 8px; }
 .skel { height: 54px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); position: relative; overflow: hidden; }
@@ -386,6 +401,6 @@
   .drawer, .drawer[data-open='true'] { transition: visibility 0s, opacity 150ms ease; transform: none; }
   .drawer:not([data-open='true']) { opacity: 0; }
   .toast, .cmd-row, .proj-list li, .conn-item, .bulk, .member, .add-panel, .skel::after { animation: none; }
-  .results, .resize::after, .link-btn { transition: none; }
+  .results, .resize::after, .link-btn, .sched-list { transition: none; }
   .cmd-row:hover > svg:last-child { transform: none; }
 }

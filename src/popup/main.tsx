@@ -26,7 +26,7 @@ function Popup() {
   const running = isRunning(run)
   const now = useNow(true, running ? 250 : 30_000)
   const dark = useDark(settings)
-  const theme = vars(settings.theme, dark)
+  const theme = vars(settings, dark)
   useEffect(() => { document.documentElement.style.background = theme['--bg'] }, [theme['--bg']])
   const n = fs?.rows.length ?? 0
   const projects = new Set(fs?.rows.map(r => r.project)).size

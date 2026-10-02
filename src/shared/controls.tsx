@@ -25,6 +25,32 @@ export function Switch({ label, checked, onChange }: { label: string; checked: b
 
 const MODES: readonly (readonly [Mode, string])[] = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]
 
+// UI and mono font: type any installed font's name (the list only suggests); empty keeps the bundled one. Applies
+// live through vars() (--sans / --mono). Each field previews in its own font.
+const FONTS = [
+  { key: 'font', label: 'Interface font', bundled: 'Geist', suggest: ['Inter', 'SF Pro Text', 'Helvetica Neue', 'IBM Plex Sans', 'system-ui'] },
+  { key: 'monoFont', label: 'Monospace font', bundled: 'JetBrains Mono', suggest: ['SF Mono', 'Menlo', 'Fira Code', 'IBM Plex Mono', 'Berkeley Mono'] },
+] as const
+
+export function FontPicker({ settings, onChange }: { settings: Settings; onChange: (s: Partial<Settings>) => void }) {
+  return (
+    <div className="fonts">
+      {FONTS.map(f => (
+        <div key={f.key} className="setting-row">
+          <div>
+            <strong>{f.label}</strong>
+            <span className="muted">Any font installed on this Mac. Empty: {f.bundled}.</span>
+          </div>
+          <input className="font-input" list={`fonts-${f.key}`} value={settings[f.key] ?? ''} placeholder={f.bundled} maxLength={60} spellCheck={false}
+            aria-label={f.label} onChange={e => onChange({ [f.key]: e.target.value })}
+            style={{ fontFamily: `var(${f.key === 'font' ? '--sans' : '--mono'})` }} />
+          <datalist id={`fonts-${f.key}`}>{f.suggest.map(s => <option key={s} value={s} />)}</datalist>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Mode segmented + theme swatch grid. Swatches preview the palette in the currently resolved mode.
 export function ThemePicker({ settings, dark, onChange }: { settings: Settings; dark: boolean; onChange: (s: Partial<Settings>) => void }) {
   return (

@@ -51,7 +51,7 @@ Surfaces:
 | `pnpm dev` | Watch-build into `dist/` (load `dist/` unpacked, hit reload in `chrome://extensions`) |
 | `pnpm build` | Typecheck + production build |
 | `pnpm server` | **The terminal server.** Keep it open: it runs the commands, prints every run live, and streams output back to the page |
-| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `src/projects.test.ts`, `src/keybinds.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
+| `pnpm test` | Assert checks: `src/term.test.ts`, `src/failed-syncs.test.ts`, `src/projects.test.ts`, `src/keybinds.test.ts`, `src/themes.test.ts`, `host/host.test.mjs` (drives the real relay + server) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm install-host <extension id>` | Writes the wrapper `host/refit-sidecar-host` and `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.hoan.refit_sidecar.json` (`allowed_origins` = this id only) |
 | `pnpm uninstall-host` | Removes both |
@@ -157,13 +157,14 @@ src/
                           URL builders connectionUrl / projectUrl / fittingRoomUrl, platform, dateRange
   term.ts                 ANSI strip, line split/cap, ago(), plural() ("3 members"), runStatus() (pill text + tone)
   keybinds.ts             KEYBINDS (the shortcut mapping list), keysOf, actionFor, rebind, validKey, keyLabel, isTyping
-  themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth, keys), DEFAULTS, vars(); shared CSS primitives + sync cards
+  themes.ts ui.css        THEMES, Settings (theme, mode, badge, drawerWidth, keys, font, monoFont), DEFAULTS, fontFamily(), vars()
+                          (colors + --sans / --mono when a custom font is set); shared CSS primitives + sync cards
   shared/
     store.ts              useStore() (reads this tab's env keys + live updates), saveSettings, useDark, useNow, isRunning
     SyncList.tsx          sync cards (drawer + popup): Succeeded after chip, status-aware foot/reason, select mode, Open in Refit
     card.tsx              CardHead (check, badge, title, chips, open link), pickOnClick, stagger, UserLabel (avatar + email + name)
     icons.tsx             ICONS (Lucide paths; add new icons here), Icon, IconBtn
-    controls.tsx          Segmented, Switch, ThemePicker, KeybindList
+    controls.tsx          Segmented, Switch, ThemePicker, FontPicker, KeybindList
     HostSetup.tsx         host missing / offline screens, hostLabel / hostTone, HostCard
     Terminal.tsx          raw output (popup's Output tab only)
   content/                the drawer (content script, closed shadow DOM)
@@ -188,7 +189,7 @@ src/
     styles.css            drawer styles, one `/* … */` section per feature (see Where to edit)
   popup/                  toolbar popup: main.tsx (Popup), PopupSettings.tsx, popup.css
   options.tsx             extension settings page (host setup)
-  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects, keybinds) against src/samples/
+  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects, keybinds, themes) against src/samples/
 .claude/skills/           ui-system (design rules), ui-verify (stub.js + mock.html + shoot.sh screenshots)
 ```
 
@@ -219,7 +220,7 @@ src/
 | Which SQL is allowed, param validation | `host/protocol.mjs`, `host/commands.json` | `PARAMS`, `bindParams`, `WRITES`, `checkQuery`; the command's `params` patterns |
 | Running SQL through Tabularis (timeouts, errors) | `host/tabularis-query.mjs` | `fail`, `TIMEOUT_MS`, `onReply` |
 | Keyboard shortcuts (add, rebind UI, handling) | `keybinds.ts`, `shared/controls.tsx`, `content/App.tsx`, `popup/main.tsx` | `KEYBINDS`, `actionFor`, `rebind`, `KeybindList`, `data-refetch`; CSS `.keybinds`, `.key-capture` (ui.css) |
-| Theme, colours, mode, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `SettingsView` |
+| Theme, colours, mode, fonts, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `FontPicker` (`FONTS` suggestions), `fontFamily`, `SettingsView` |
 | Icons | `shared/icons.tsx` | `ICONS` (add a path), `Icon`, `IconBtn` |
 | Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; icon: `paint`, `countIcon` |
 | Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |

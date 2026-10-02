@@ -108,7 +108,7 @@ export function App() {
   const title = crumb(view, stack.length - 1)
 
   return (
-    <div className={`root ${dark ? 'dark' : 'light'}`} style={vars(settings.theme, dark) as React.CSSProperties}>
+    <div className={`root ${dark ? 'dark' : 'light'}`} style={vars(settings, dark) as React.CSSProperties}>
       <button className="launcher" data-hidden={open} aria-label={`Open Refit Sidecar${n ? `, ${n} failed syncs` : ''}`} title="Refit Sidecar" onClick={() => setOpen(true)}>
         <Icon d="terminal" size={18} />
         {n > 0 && <span className="launcher-count">{n > 99 ? '99+' : n}</span>}

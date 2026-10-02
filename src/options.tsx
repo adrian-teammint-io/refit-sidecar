@@ -11,7 +11,7 @@ import { HostCard, HostSetup } from './shared/HostSetup'
 function Options() {
   const { settings, host } = useStore()
   const dark = useDark(settings)
-  const theme = vars(settings.theme, dark)
+  const theme = vars(settings, dark)
   useEffect(() => { document.documentElement.style.background = theme['--bg'] }, [theme['--bg']])
 
   return (

@@ -88,7 +88,7 @@ const syncRequests = MODE === 'never' ? undefined : {
   IN_PROGRESS: { at: now - 60000, runId: 'r2', truncated: false, rows: rows.slice(0, 2).map(r => ({ ...r, id: r.id.replace('aaaa', 'bbbb'), reason: null, displayReason: null, recoveredAt: null })) },
   FRAGMENTED: { at: now - 60000, runId: 'r3', truncated: false, rows: [] },
 }
-const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}) }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, pins }
+const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}), font: decodeURIComponent((Q.match(/font=([^&]*)/) || [])[1] || ''), monoFont: decodeURIComponent((Q.match(/mono=([^&]*)/) || [])[1] || '') }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 // `answer` in the hash: a project-members run "finishes" 50ms later with STUB_MEMBERS (u1 is the owner), through
 // storage.onChanged like the worker's writes. Everything else stays unanswered.

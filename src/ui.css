@@ -176,6 +176,13 @@ code { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background:
 }
 .host-card > svg { color: var(--accent); flex-shrink: 0; }
 .light .host-card > svg { color: var(--text); }
+.fonts { display: flex; flex-direction: column; gap: 8px; }
+.font-input {
+  width: 150px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); outline: none; transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.font-input::placeholder { color: var(--muted); }
+.font-input:focus { border-color: color-mix(in oklab, var(--accent) 55%, transparent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .host-card > div, .setting-row > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .host-card strong, .setting-row strong { font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .host-card span, .setting-row span { font-size: 11.5px; overflow-wrap: anywhere; }

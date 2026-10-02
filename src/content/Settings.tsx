@@ -1,6 +1,6 @@
 import type { HostState } from '../api'
 import type { Settings } from '../themes'
-import { KeybindList, Switch, ThemePicker } from '../shared/controls'
+import { FontPicker, KeybindList, Switch, ThemePicker } from '../shared/controls'
 import { HostCard } from '../shared/HostSetup'
 
 export function SettingsView({ settings, dark, host, onChange }: {
@@ -15,6 +15,7 @@ export function SettingsView({ settings, dark, host, onChange }: {
       <section>
         <h2>Appearance</h2>
         <ThemePicker settings={settings} dark={dark} onChange={onChange} />
+        <FontPicker settings={settings} onChange={onChange} />
       </section>
       <section className="setting-row">
         <div>

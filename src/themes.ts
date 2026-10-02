@@ -23,10 +23,25 @@ export type Settings = {
   badge: boolean // toolbar icon shows the failed-sync count
   drawerWidth: number // px, dragged from the drawer's left edge
   keys: Partial<Keys> // keyboard shortcut overrides (keybinds.ts); keysOf() fills in the defaults
+  font: string // UI font family name ('' = bundled Geist), any font installed on the Mac
+  monoFont: string // monospace font family name ('' = bundled JetBrains Mono)
 }
-export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440, keys: {} }
+export const DEFAULTS: Settings = { theme: 'graphite', mode: 'system', badge: true, drawerWidth: 440, keys: {}, font: '', monoFont: '' }
 
-export function vars(theme: string, dark: boolean): Record<string, string> {
-  const [bg, surface, raised, text, muted, accent, onAccent] = (THEMES[theme] ?? THEMES.graphite)[dark ? 'dark' : 'light']
-  return { '--bg': bg, '--surface': surface, '--raised': raised, '--text': text, '--muted': muted, '--accent': accent, '--on-accent': onAccent }
+// A typed font name as a CSS family list: quoted (CSS generics like system-ui stay bare), then the fallbacks. Quotes,
+// backslashes and ; { } are dropped so a name can only ever be a family name. '' = keep the bundled font (ui.css).
+const GENERIC = /^(system-ui|ui-(sans-serif|serif|monospace|rounded)|sans-serif|serif|monospace|cursive|fantasy)$/i
+export function fontFamily(name: string, fallback: string): string | undefined {
+  const n = name.replace(/["'\\;{}]/g, '').trim()
+  return n ? `${GENERIC.test(n) ? n : `"${n}"`}, ${fallback}` : undefined
+}
+
+export function vars(s: Settings, dark: boolean): Record<string, string> {
+  const [bg, surface, raised, text, muted, accent, onAccent] = (THEMES[s.theme] ?? THEMES.graphite)[dark ? 'dark' : 'light']
+  const sans = fontFamily(s.font ?? '', 'ui-sans-serif, system-ui, sans-serif')
+  const mono = fontFamily(s.monoFont ?? '', "ui-monospace, 'SF Mono', monospace")
+  return {
+    '--bg': bg, '--surface': surface, '--raised': raised, '--text': text, '--muted': muted, '--accent': accent, '--on-accent': onAccent,
+    ...(sans && { '--sans': sans }), ...(mono && { '--mono': mono }),
+  }
 }

@@ -1,7 +1,7 @@
 import type { HostState } from '../api'
 import type { Settings } from '../themes'
 import { APP } from '../failed-syncs'
-import { KeybindList, Switch, ThemePicker } from '../shared/controls'
+import { FontPicker, KeybindList, Switch, ThemePicker } from '../shared/controls'
 import { HostCard } from '../shared/HostSetup'
 
 export function PopupSettings({ settings, dark, host, onChange }: { settings: Settings; dark: boolean; host?: HostState; onChange: (s: Partial<Settings>) => void }) {
@@ -15,6 +15,7 @@ export function PopupSettings({ settings, dark, host, onChange }: { settings: Se
       <section>
         <h2 className="eyebrow">Appearance</h2>
         <ThemePicker settings={settings} dark={dark} onChange={onChange} />
+        <FontPicker settings={settings} onChange={onChange} />
       </section>
 
       <section className="setting-row">

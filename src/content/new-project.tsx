@@ -6,11 +6,11 @@ import { ENV } from '../table'
 import { NO_PROJECT, PLANS, PROJECT_STATUSES, ROLES, toHex, type Role, type UserHit, type UserSearch } from '../projects'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { commandState } from './browse'
+import { commandState, type Common } from './browse'
 import { WriteConfirm } from './ui'
 import { UserLabel } from '../shared/card'
 import { UserPicker } from './members'
-import type { Common } from './views'
+
 
 const DEFAULT_MEMBER = 'hoan@team-mint.io' // pre-filled member (Hoàn), removable
 const MAX_MEMBERS = 50 // the members param takes at most 50

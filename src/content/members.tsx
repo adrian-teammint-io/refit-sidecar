@@ -6,10 +6,10 @@ import { ENV } from '../table'
 import { ROLES, cleanQuery, toHex, type Members, type Role, type UserHit, type UserSearch } from '../projects'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
-import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, commandState, useDebounced } from './browse'
+import { Empty, ErrorBanner, SearchBox, Skeleton, StatusLine, commandState, useDebounced, type Common } from './browse'
 import { WriteConfirm } from './ui'
 import { UserLabel, stagger } from '../shared/card'
-import type { Common } from './views'
+
 
 const ROLE_OPTIONS = ROLES.map(r => [r, r[0].toUpperCase() + r.slice(1)] as const)
 

@@ -96,6 +96,7 @@ export function parseFittingRooms(stdout: string): FittingRoom[] {
 // ---------- project members (refit_user_project_relation) ----------
 
 export const ROLES = ['viewer', 'editor', 'admin'] as const // refit_user_role values
+export type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project> // a search hit has id + name; a list row has the rest
 export const PLANS = ['BASIC', 'DEMO', 'ENTERPRISE'] as const // project_plan values New project offers (no TRIAL)
 export const PROJECT_STATUSES = ['PAUSED', 'ACTIVE', 'NEED_PAYMENT'] as const // project_status values
 // ponytail: user-search always joins on a project for memberRole; outside one (New project) it passes the nil UUID,

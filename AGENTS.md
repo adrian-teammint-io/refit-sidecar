@@ -1,6 +1,6 @@
 # Refit Sidecar
 
-> **Asked to change something?** Go to [Codebase structure → Where to edit](#where-to-edit) first: it maps each feature to its files, symbols and CSS section, so you can open the right file without searching. A new command follows [How a command flows](#how-a-command-flows-touch-these-in-order-for-a-new-one).
+> **Asked to change something?** Go to [Codebase structure → Where to edit](#where-to-edit) first: it maps each feature to its files, symbols and CSS section, so you can open the right file without searching. A new command follows [How a command flows](#how-a-command-flows-touch-these-in-order-for-a-new-one); a new drawer screen follows [Adding a view](#adding-a-view).
 
 Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the three writes, `delete-syncs`, `add-project-user` and `create-project`:
 - `projects q status sort offset`: projects with connection count, FAIL count and last sync; sort `active` (active first, default) / `name` / `recent`
@@ -77,7 +77,7 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
   - Relay → worker, unsolicited: `{id: 'status', server: 'up' | 'down'}` whenever the terminal server appears or goes away (the relay retries the socket every 1s). On `up`, the worker sends `hello` to get the command list. While the server is down, the relay rejects runs with a "start pnpm server" error.
   - `hello` is an addition to the original spec: it lists the server's commands.
 - **Chunking**: the server sends whole lines in chunks of at most 64K chars (`MAX_CHUNK` in `protocol.mjs`). That keeps every message under Chrome's 1 MB host → extension limit even when every character is JSON-escaped. A partial line is flushed after 100 ms idle or at stream end.
-- **Results** (`storage.local`): `failedSyncs` (the FAIL fetch), `syncRequests` (`{IN_PROGRESS, FRAGMENTED}`, same shape), plus pages `{at, runId, query, rows, hasMore}` for `projects`, `connections` and `fittingRooms`, and for `projectConnections` (by project id, newest `MAX_CACHED_PROJECTS` kept). `mergePage()` appends a run of the same query at the next offset; any other query replaces the page. `pins` holds a project snapshot per pinned id, refreshed whenever that project comes back in a result. A failed run keeps the last good rows and adds `error`. Results are per environment: prod uses these key names (the popup and toolbar icon only read prod), staging stores `stag.<key>` (`envKey()`, `DATA_KEYS` in `src/table.ts`). The worker writes under the run's `args.env`; `useStore` reads the tab's `ENV`. `settings`, `run`, `host` and `output` are shared, and a run only counts as a view's own (`runMatches`) when its env matches the tab.
+- **Results** (`storage.local`): `failedSyncs` (the FAIL fetch), `syncRequests` (`{IN_PROGRESS, FRAGMENTED}`, same shape), plus pages `{at, runId, query, rows, hasMore}` for `projects`, `connections` and `fittingRooms`, and for `projectConnections` (by project id, newest `MAX_CACHED_PROJECTS` kept). `mergePage()` appends a run of the same query at the next offset; any other query replaces the page. `pins` holds a project snapshot per pinned id, refreshed whenever that project comes back in a result. A failed run keeps the last good rows and adds `error`. Results are per environment: prod uses these key names (the popup and toolbar icon only read prod), staging stores `stag.<key>` (`envKey()`, `DATA_KEYS` in `src/table.ts`). The worker writes under the run's `args.env`; `useStore` reads the tab's `ENV`. `settings`, `run`, `host` and `output` are shared, and a run only counts as a view's own (`runMatches`, through `commandState` in `browse.tsx`) when its env matches the tab.
 - **One command at a time, latest wins** (`startRun` in `host.ts`): while a run is going, the newest request waits, replacing any older waiting one. A request for the *same* command cancels the running one and discards its result, so a search box never waits behind a stale query. `finish()` starts the waiting request. The status line shows "Queued after …".
 - **Output buffer**: the worker strips ANSI and handles `\r` redraws (`term.ts`). It keeps the last `MAX_LINES` (2000) lines and counts the dropped ones, and writes `output` to `storage.session` at most every 120 ms (only the popup's Output tab shows it). Raw stdout (up to 8 MB) is kept separately for the parser.
 - **Lifecycle** (`HostState` in `api.ts`):
@@ -113,7 +113,7 @@ drawer / popup ──call(req)──▶ worker (background.ts + host.ts) ──c
    - **Never test a query against prod without asking Hoàn.** Verify with captured samples in `src/samples/`, `pnpm test` and `ui-verify`.
 2. Add its name to `Command` in `src/api.ts`.
 3. Parse: write a pure parser with `parseTable()` (`src/table.ts`, which looks columns up by name, turns `""` into null for nullable columns, and checks numbers) plus a `*.test.ts` against captured output in `src/samples/`. Store the result in `storeResult()` in `src/host.ts` through its `save()` (which keys it by the run's env), under its own key, and add that key to `DATA_KEYS` in `src/table.ts` and the `Store` type in `shared/store.ts`. Send `env: ENV` with the run (browse views get it from `useBrowse`).
-4. UI: add a view in `content/views.tsx` and a row on `Home`, add the view to `View` and `TITLES` in `content/App.tsx` (a browse view: `useBrowse` + `Browse` from `content/browse.tsx`), then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
+4. UI: follow [Adding a view](#adding-a-view), then add a fixture and nav mode to `.claude/skills/ui-verify/stub.js` and screenshot.
 
 ## Keyboard shortcuts
 
@@ -161,22 +161,27 @@ src/
   shared/
     store.ts              useStore() (reads this tab's env keys + live updates), saveSettings, useDark, useNow, isRunning
     SyncList.tsx          sync cards (drawer + popup): Succeeded after chip, status-aware foot/reason, select mode, Open in Refit
+    card.tsx              CardHead (check, badge, title, chips, open link), pickOnClick, stagger, UserLabel (avatar + email + name)
     icons.tsx             ICONS (Lucide paths; add new icons here), Icon, IconBtn
     controls.tsx          Segmented, Switch, ThemePicker, KeybindList
     HostSetup.tsx         host missing / offline screens, hostLabel / hostTone, HostCard
     Terminal.tsx          raw output (popup's Output tab only)
   content/                the drawer (content script, closed shadow DOM)
     main.tsx              mounts App in a shadow root, injects fonts, stops key events reaching the page
-    App.tsx               View union + TITLES, view stack (push / back), header buttons, per-view query state, exec(), pin(),
-                          toasts, ViewBoundary (crash banner), resize wiring, routes `view.kind` -> component
-    views.tsx             Home (CommandRow list + pinned), ProjectsView (ProjectRow), ProjectView (Connections | Members switch,
-                          ProjectConnectionsPanel), ConnectionList (cards + select + Open in Refit), ConnectionsView, FittingRoomsView;
-                          `Common` props type every view gets
+    App.tsx               view stack (push / back / replace), header (Back, breadcrumbs, registry button, settings, close),
+                          per-view query state (useQuery), exec(), pin(), toasts, ViewBoundary (crash banner), resize wiring
+    routes.tsx            View union, Ctx (what a view gets), VIEWS registry (title, render, header button, noHost), titleOf
+    home.tsx              Home (CommandRow list + pinned)
+    projects.tsx          ProjectsView (ProjectRow), ProjectView (Connections | Members switch, ProjectConnectionsPanel)
+    connections.tsx       ConnectionList (cards + select + Open in Refit), SelectToggle, ConnectionsView
+    fitting.tsx           FittingRoomsView
     failed.tsx            FailedView (status tabs, fetch, Select mode, bulk bar) + Confirm (delete confirm)
     members.tsx           MembersPanel (member list), AddUser, UserPicker (shared user search)
     new-project.tsx       NewProjectView (create-project form + confirm)
-    browse.tsx            shared list plumbing: useBrowse (debounced fetch, refresh, loadMore), runMatches, StatusLine, ErrorBanner,
-                          Empty, Skeleton, SearchBox, LoadMore (auto), Browse wrapper, useDebounced
+    browse.tsx            shared list plumbing: Common / Exec / OpenFailed types, commandState (a command's mine / busy / last / ok),
+                          useBrowse (debounced fetch, refresh, loadMore), StatusLine, ErrorBanner, Empty, Skeleton, SearchBox,
+                          LoadMore (auto), Browse wrapper, useDebounced
+    ui.tsx                shared view pieces: useSelection + SelectionRow (select mode bulk bar), EnvTag, WriteConfirm (every write's confirm)
     resize.ts             useResize (left-edge drag, arrows, double-click reset; MIN/MAX/DEFAULT_WIDTH)
     Settings.tsx          SettingsView (drawer settings page)
     styles.css            drawer styles, one `/* … */` section per feature (see Where to edit)
@@ -190,17 +195,17 @@ src/
 
 | Request is about… | Edit | Symbols / CSS section |
 |---|---|---|
-| Home screen rows, pinned list | `content/views.tsx` | `Home`, `CommandRow`; CSS "Home: command list" |
-| A new drawer screen | `content/App.tsx` + a component | add to `View` and `TITLES`, route it where `body =` is set, `push({kind})` from a button |
-| Header buttons (back, +, settings, close), STAG chip | `content/App.tsx` | the `<header className="head">` block; CSS "Drawer", "Staging" |
+| Home screen rows, pinned list | `content/home.tsx` | `Home`, `CommandRow`; CSS "Home: command list" |
+| A new drawer screen | `content/routes.tsx` + a component | see [Adding a view](#adding-a-view) |
+| Header buttons (back, breadcrumbs, +, settings, close), STAG chip | `content/App.tsx`, `content/routes.tsx` | the `<header className="head">` block, a view's `header` in `VIEWS`; CSS "Drawer", "Breadcrumbs", "Staging" |
 | Drawer open/close, Esc, toasts, crash banner | `content/App.tsx` | `App` (onKeyDown, `flash`), `ViewBoundary` |
 | Drawer width / resize handle | `content/resize.ts`, `App.tsx` | `useResize`, `clampWidth`; CSS "Left-edge resize handle" |
-| Projects list: search, filters, sort, pin | `content/views.tsx`, `projects.ts`, `host/sql/projects.sql` | `ProjectsView`, `ProjectRow`, `STATUSES`, `PROJECT_SORTS`; pins: `togglePin` / `pinnedFor`; CSS "Projects list" |
-| One project: header, tabs | `content/views.tsx` | `ProjectView`, `PROJECT_TABS`; CSS "One project" |
-| Project connections list, sort, group by service | `content/views.tsx`, `host/sql/project-connections.sql` | `ProjectConnectionsPanel`, `CONN_SORTS`, `ConnectionList` (`groupBy`) |
-| Connection cards anywhere (incl. select + Open in Refit, live FAIL count / reason) | `content/views.tsx`, `failed-syncs.ts`, `background.ts` | `ConnectionList`, `liveFails`, `openTabs`, `MAX_TABS`; CSS "Select toggle…", "Bulk bar" |
-| Connections search (all projects) | `content/views.tsx`, `host/sql/connections.sql` | `ConnectionsView`, `parseConnections` |
-| Fitting rooms search | `content/views.tsx`, `host/sql/fitting-rooms.sql` | `FittingRoomsView`, `parseFittingRooms`, `fittingRoomUrl` |
+| Projects list: search, filters, sort, pin | `content/projects.tsx`, `projects.ts`, `host/sql/projects.sql` | `ProjectsView`, `ProjectRow`, `STATUSES`, `PROJECT_SORTS`; pins: `togglePin` / `pinnedFor`; CSS "Projects list" |
+| One project: header, tabs | `content/projects.tsx` | `ProjectView`, `PROJECT_TABS`; CSS "One project" |
+| Project connections list, sort, group by service | `content/projects.tsx`, `content/connections.tsx`, `host/sql/project-connections.sql` | `ProjectConnectionsPanel`, `CONN_SORTS`, `ConnectionList` (`groupBy`) |
+| Connection cards anywhere (incl. select + Open in Refit, live FAIL count / reason) | `content/connections.tsx`, `failed-syncs.ts`, `background.ts` | `ConnectionList`, `liveFails`, `openTabs`, `MAX_TABS`; CSS "Select toggle…", "Bulk bar" |
+| Connections search (all projects) | `content/connections.tsx`, `host/sql/connections.sql` | `ConnectionsView`, `parseConnections` |
+| Fitting rooms search | `content/fitting.tsx`, `host/sql/fitting-rooms.sql` | `FittingRoomsView`, `parseFittingRooms`, `fittingRoomUrl` |
 | Members list, Add user | `content/members.tsx`, `host/sql/project-members.sql`, `user-search.sql`, `add-project-user.sql` | `MembersPanel`, `AddUser`, `UserPicker`; CSS "Project members + Add user" |
 | New project form | `content/new-project.tsx`, `host/sql/create-project.sql`, `host/protocol.mjs` | `NewProjectView`, `DEFAULT_MEMBER`; `CREATE_PROJECT`, `SHAPES`; CSS "New project form" |
 | Sync requests (status tabs), select, delete confirm | `content/failed.tsx`, `shared/SyncList.tsx`, `host/sql/failed-syncs.sql`, `delete-syncs.sql` | `FailedView`, `SYNC_STATUSES`, `Confirm`, `MAX_DELETE`, `SyncList`; CSS "Failed syncs…", "Bulk bar" |
@@ -218,6 +223,21 @@ src/
 | Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; icon: `paint`, `countIcon` |
 | Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |
 | Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html (`&tab=IN_PROGRESS` picks a Sync requests tab, `&reloading` = the Connections search refetching over its page), `MODES` in shoot.sh; the stub records requests on `<html data-sent>` for `--dump-dom` checks |
+
+| Card header, user rows, select mode, write confirms | `shared/card.tsx`, `content/ui.tsx` | `CardHead`, `UserLabel`, `useSelection`, `SelectionRow`, `WriteConfirm`, `EnvTag`; CSS "Bulk bar", "Project members + Add user" |
+
+### Adding a view
+
+1. Write the component in its own `content/<name>.tsx`. Props: what it needs from the store plus `Common` (`browse.tsx`: run, now, ready, exec, cancel).
+   - A list from a browse command: `useBrowse` + `<Browse>` (search, status line, error, empty, skeleton, load more come with it), cards with `CardHead` + `stagger` (`shared/card.tsx`).
+   - A command's state (running, other command busy, last result): `commandState(run, command, extra)`; don't re-derive it from `run`.
+   - Select mode: `useSelection` + `SelectionRow` (`ui.tsx`), whole-card toggle with `pickOnClick`.
+   - A write: end in `WriteConfirm` (`ui.tsx`) inside a `.bulk` / `.add-panel` container; it brings the PROD/STAG tag, Tabularis wait, busy note and typed confirm on prod.
+   - User rows: `UserLabel`.
+2. Add its kind to `View` and an entry to `VIEWS` in `content/routes.tsx`: `title` (string, or from the view's params), `render(v, ctx)`, optional `header` button. Search state that must survive Back goes in `Ctx.queries` (and `useQuery` in `App.tsx`).
+3. Open it with `ctx.push({ kind })` from a button (a Home row: `CommandRow` in `home.tsx`, and add the kind to `HomeTarget`). Back, Esc, breadcrumbs, the error boundary and the Refetch key (a `data-refetch` control) work without more code.
+4. Styles: a `/* … */` section in `content/styles.css`; reuse `ui.css` primitives (.btn, .pill, .badge, .sync cards) first.
+5. Screenshot it (`ui-verify`: a stub fixture, a `nav=` mode or `click=` flags).
 
 ### How a command flows (touch these in order for a new one)
 

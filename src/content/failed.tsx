@@ -9,9 +9,9 @@ import { isRunning } from '../shared/store'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
-import { Empty, ErrorBanner, Skeleton, commandState } from './browse'
+import { Empty, ErrorBanner, Skeleton, commandState, type Common } from './browse'
 import { SelectionRow, WriteConfirm, useSelection } from './ui'
-import type { Common } from './views'
+
 
 const MAX_DELETE = 100 // the delete-syncs ids param takes at most 100
 const ENV_NAME = ENV === 'stag' ? 'staging' : 'prod'

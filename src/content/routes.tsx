@@ -1,16 +1,19 @@
 // Every drawer view in one table. Adding a view: add its kind to `View`, then an entry to VIEWS (title, render, and
 // optionally a header button). App does the rest: the stack, Back / Esc, breadcrumbs, header, error boundary.
 import type { ReactNode } from 'react'
-import type { Project, ProjectsQuery } from '../projects'
+import type { Project, ProjectRef, ProjectsQuery } from '../projects'
 import type { useStore } from '../shared/store'
 import type { IconName } from '../shared/icons'
 import type { Settings } from '../themes'
 import { SettingsView } from './Settings'
 import { FailedView } from './failed'
 import { NewProjectView } from './new-project'
-import { Home, ProjectsView, ProjectView, ConnectionsView, FittingRoomsView, type Common } from './views'
+import type { Common } from './browse'
+import { Home } from './home'
+import { ProjectsView, ProjectView } from './projects'
+import { ConnectionsView } from './connections'
+import { FittingRoomsView } from './fitting'
 
-export type ProjectRef = Pick<Project, 'id' | 'name'> & Partial<Project>
 export type View =
   | { kind: 'home' }
   | { kind: 'failed'; conn?: { id: string; name: string } } // conn: only that connection's failures

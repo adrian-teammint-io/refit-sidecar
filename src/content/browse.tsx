@@ -9,6 +9,9 @@ import { ENV } from '../table'
 import { Icon, type IconName } from '../shared/icons'
 
 export type Exec = (command: Command, args?: Args) => void
+// What every view gets from App for the one run slot: the current run, the clock, host readiness, run and cancel.
+export type Common = { run?: Run; now: number; ready: boolean; exec: Exec; cancel: () => void }
+export type OpenFailed = (c: { connectionId: string; name: string }) => void // opens Sync requests for one connection
 const MAX_AGE = 30_000 // ms; ponytail: age only, a delete elsewhere within 30s still shows the old counts until refresh
 
 export function useDebounced<T>(value: T, ms = 300): T {

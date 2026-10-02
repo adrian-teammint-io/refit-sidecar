@@ -58,6 +58,7 @@ export type Projects = Page<Project, ProjectsQuery>
 export type ProjectConnections = Record<string, Page<ProjectConnection, ConnectionsQuery>> // by project id
 export type Connections = Page<ConnectionHit, TextQuery>
 export type FittingRooms = Page<FittingRoom, TextQuery>
+export type FittingRoomConnections = Record<string, Page<ProjectConnection, ConnectionsQuery>> // by fitting room id, rows from parseProjectConnections
 export type Pins = Record<string, Project & { pinnedAt: number }> // snapshot, refreshed whenever the project is fetched again
 
 const CONN_COLS = {

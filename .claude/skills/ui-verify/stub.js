@@ -78,17 +78,31 @@ const fitRows = [
   F(2, '새 피팅룸', 0, 0, 0, 0, 1500, null), F(3, '[카카오단골가게] Refit RD_260917', 1, 18, 9, 0, 1560, 1560), F(4, 'Legacy weekly report', 7, 1, 1, 1, 90000, 90000),
 ]
 const fittingRooms = MODE === 'never' ? undefined : page('f1', { q: '' }, fill(fitRows, (r, i) => ({ ...r, id: uuid(700 + i) })))
+// The first fitting room's nodes: two loads, a join, an aggregate with a FAIL output, an export, and a dangling input.
+const nid = k => uuid(800 + Number(k.slice(1))) // n1 -> a real UUID, so Open in Refit shows
+const N = (id, name, type, inputs, outputs = 0, outputStatus = null) => ({ id: nid(id), name, type, inputs, outputs, outputStatus, outputAt: outputStatus && new Date(now - 2400000).toISOString().slice(0, 19) + 'Z' })
+const Tr = (id, name) => ({ type: 'transaction', id: nid(id), name }), Cn = name => ({ type: 'connection', id: uuid(1), name })
+const flowRows = [
+  N('n1', 'KR Meta clean', 'organize', [Cn('TEST')]), N('n2', 'GA4 events', 'organize', [Cn('GA4_이벤트이름')]),
+  N('n3', 'Google_US daily', 'organize', [Cn('Google_US')], 1, 'SUCCESS'),
+  N('n4', 'Meta + GA4', 'join', [Tr('n1', 'KR Meta clean'), Tr('n2', 'GA4 events')]),
+  N('n5', 'Weekly by campaign', 'aggregate', [Tr('n4', 'Meta + GA4'), { type: 'transaction', id: 'gone', name: null }], 2, 'FAIL'),
+  N('n6', 'All channels', 'union', [Tr('n4', 'Meta + GA4'), Tr('n3', 'Google_US daily')]),
+  N('n7', 'Export to Sheets', 'export', [Tr('n6', 'All channels')], 1, 'SUCCESS'),
+]
+const fittingRoomFlows = MODE === 'never' || /noflow/.test(Q) ? undefined : { [uuid(700)]: { at: now - 300000, runId: 'fl1', rows: flowRows, truncated: false } }
+const fittingRoomConnections = MODE === 'never' ? undefined : { [uuid(700)]: page('fc1', { q: '', sort: 'status' }, connRows.slice(0, 3)) }
 const pins = MODE === 'never' ? undefined : Object.fromEntries([projectRows[1], projectRows[0]].map((p, i) => [p.id, { ...p, pinnedAt: now - i * 1000 }]))
 const host = MODE === 'offline' ? { state: 'offline' }
   : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
-  : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections', 'connections', 'fitting-rooms'] }
+  : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections', 'connections', 'fitting-rooms', 'fitting-room-connections', 'fitting-room-flow'] }
 // Sync requests tabs: two IN_PROGRESS rows (no reason), FRAGMENTED fetched with nothing in it
 const syncRequests = MODE === 'never' ? undefined : {
   IN_PROGRESS: { at: now - 60000, runId: 'r2', truncated: false, rows: rows.slice(0, 2).map(r => ({ ...r, id: r.id.replace('aaaa', 'bbbb'), reason: null, displayReason: null, recoveredAt: null })) },
   FRAGMENTED: { at: now - 60000, runId: 'r3', truncated: false, rows: [] },
 }
-const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}), font: decodeURIComponent((Q.match(/font=([^&]*)/) || [])[1] || ''), monoFont: decodeURIComponent((Q.match(/mono=([^&]*)/) || [])[1] || '') }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, pins }
+const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}), font: decodeURIComponent((Q.match(/font=([^&]*)/) || [])[1] || ''), monoFont: decodeURIComponent((Q.match(/mono=([^&]*)/) || [])[1] || '') }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, fittingRoomConnections, fittingRoomFlows, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 // `answer` in the hash: a project-members run "finishes" 50ms later with STUB_MEMBERS (u1 is the owner), through
 // storage.onChanged like the worker's writes. Everything else stays unanswered.

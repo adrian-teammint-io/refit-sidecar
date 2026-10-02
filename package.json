@@ -8,7 +8,7 @@
     "build": "pnpm typecheck && vite build && vite build -c vite.content.config.ts",
     "package": "pnpm build && N=RefitSidecar-v$npm_package_version-$(date +%d.%m) && mkdir -p releases && rm -rf releases/$N releases/$N.zip && cp -R dist releases/$N && cd releases && zip -qr $N.zip $N && rm -rf $N && echo \"Packaged releases/$N.zip\"",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types src/term.test.ts && node --experimental-strip-types src/failed-syncs.test.ts && node --experimental-strip-types src/projects.test.ts && node --experimental-strip-types src/keybinds.test.ts && node --experimental-strip-types src/themes.test.ts && node host/host.test.mjs",
+    "test": "node --experimental-strip-types src/term.test.ts && node --experimental-strip-types src/failed-syncs.test.ts && node --experimental-strip-types src/projects.test.ts && node --experimental-strip-types src/flow.test.ts && node --experimental-strip-types src/keybinds.test.ts && node --experimental-strip-types src/themes.test.ts && node host/host.test.mjs",
     "server": "node host/server.mjs",
     "install-host": "node host/install.mjs",
     "uninstall-host": "node host/install.mjs --uninstall",

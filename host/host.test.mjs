@@ -88,6 +88,17 @@ assert.throws(() => checkQuery('sql/projects.sql', bindParams(cp, cpOk)), /only 
 // project-members (with the owner flag from project.create_by) binds and stays a plain read
 const pm = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/project-members.sql'), 'utf8'))
 assert.equal(checkQuery('sql/project-members.sql', bindParams(pm, { project_id: P })), false)
+// fitting-room-connections binds the room id as a UUID literal and stays a plain read
+const frc = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/fitting-room-connections.sql'), 'utf8'))
+const frcOk = { fitting_room_id: P.toUpperCase(), q: toHex('meta'), sort: 'status', offset: '0' }
+const frcSql = bindParams(frc, frcOk)
+assert.ok(frcSql.includes(`t.fitting_room_id = '${P}'`))
+assert.equal(checkQuery('sql/fitting-room-connections.sql', frcSql), false)
+assert.throws(() => bindParams(frc, { ...frcOk, fitting_room_id: "x' OR '1'='1" }), /fitting_room_id must be a UUID/)
+// fitting-room-flow (every node with its payload.from inputs) binds the same way and stays a plain read
+const flow = bindParams(stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/fitting-room-flow.sql'), 'utf8')), { fitting_room_id: P })
+assert.ok(flow.includes(`t.fitting_room_id = '${P}'`))
+assert.equal(checkQuery('sql/fitting-room-flow.sql', flow), false)
 assert.deepEqual(Object.keys(CONNECTIONS), ['prod', 'stag'])
 for (const [name, spec] of Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, 'commands.json'), 'utf8')).commands)) {
   assert.equal(spec.params.env?.pattern, 'prod|stag', `${name} takes env`)

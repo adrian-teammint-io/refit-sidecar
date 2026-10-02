@@ -1,7 +1,7 @@
 import type { Line, RunInfo } from './term'
 
 // Commands the UI can ask for. The host's commands.json is the real allowlist; this union just types the UI side.
-export type Command = 'failed-syncs' | 'projects' | 'project-connections' | 'connections' | 'fitting-rooms' | 'delete-syncs'
+export type Command = 'failed-syncs' | 'projects' | 'project-connections' | 'connections' | 'fitting-rooms' | 'fitting-room-connections' | 'fitting-room-flow' | 'delete-syncs'
   | 'project-members' | 'user-search' | 'add-project-user' | 'create-project'
 export type Args = Record<string, string> // validated again by the server against commands.json params
 export const MAX_TABS = 10 // openTabs limit

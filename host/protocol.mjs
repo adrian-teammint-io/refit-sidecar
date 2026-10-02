@@ -69,6 +69,7 @@ export const PARAMS = {
   sync_status: ENUM('FAIL', 'IN_PROGRESS', 'FRAGMENTED'), // the drawer's Sync requests tabs (failed-syncs.sql)
   sort: ENUM('active', 'name', 'recent', 'status', 'service'),
   user_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
+  fitting_room_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   role: ENUM('admin', 'editor', 'viewer'), // refit_user_role values
   // create-project
   name: v => { // project name: hex of UTF-8, like q, but must not be blank (project has CHECK char_length(name) > 0)

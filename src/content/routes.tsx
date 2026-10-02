@@ -1,7 +1,7 @@
 // Every drawer view in one table. Adding a view: add its kind to `View`, then an entry to VIEWS (title, render, and
 // optionally a header button). App does the rest: the stack, Back / Esc, breadcrumbs, header, error boundary.
 import type { ReactNode } from 'react'
-import type { Project, ProjectRef, ProjectsQuery } from '../projects'
+import type { FittingRoom, Project, ProjectRef, ProjectsQuery } from '../projects'
 import type { useStore } from '../shared/store'
 import type { IconName } from '../shared/icons'
 import type { Settings } from '../themes'
@@ -12,7 +12,7 @@ import type { Common } from './browse'
 import { Home } from './home'
 import { ProjectsView, ProjectView } from './projects'
 import { ConnectionsView } from './connections'
-import { FittingRoomsView } from './fitting'
+import { FittingRoomsView, FittingRoomView } from './fitting'
 
 export type View =
   | { kind: 'home' }
@@ -20,6 +20,7 @@ export type View =
   | { kind: 'projects' }
   | { kind: 'connections' }
   | { kind: 'fitting' }
+  | { kind: 'fitting-room'; room: FittingRoom }
   | { kind: 'new-project'; from?: ProjectRef } // from: Duplicate pre-fills the form from this project and its members
   | { kind: 'project'; project: ProjectRef }
   | { kind: 'settings' }
@@ -70,7 +71,14 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
   },
   fitting: {
     title: 'Fitting rooms',
-    render: (_, x) => <FittingRoomsView page={x.store.fittingRooms} query={x.queries.fitting[0]} setQuery={x.queries.fitting[1]} openProject={x.openProject} {...x.common} />,
+    render: (_, x) => <FittingRoomsView page={x.store.fittingRooms} query={x.queries.fitting[0]} setQuery={x.queries.fitting[1]} openProject={x.openProject}
+      openRoom={room => x.push({ kind: 'fitting-room', room })} {...x.common} />,
+  },
+  'fitting-room': {
+    title: v => v.room.name,
+    render: (v, x) => <FittingRoomView key={v.room.id} room={v.room} cache={x.store.fittingRoomConnections}
+      flow={x.store.fittingRoomFlows?.[v.room.id]} openProject={x.openProject}
+      openFailed={x.openFailed} fs={x.store.failedSyncs} {...x.common} />,
   },
   failed: {
     title: 'Sync requests',

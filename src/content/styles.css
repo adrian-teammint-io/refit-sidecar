@@ -198,6 +198,54 @@
 .open-link svg { color: var(--muted); }
 
 /* Failed syncs: select mode. Selected = accent border + 1px ring (the system's selected state); red stays on Delete. */
+/* Fitting room Flow tab (content/flow.tsx): Steps list and Graph */
+.flow { display: flex; flex-direction: column; gap: 10px; }
+.flow-steps section:first-child .group-head { padding-top: 0; }
+.flow-node[data-focus='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.flow-inputs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 22px; padding: 0 8px; border-radius: 6px;
+  font: 11.5px/1 var(--sans); color: var(--text); background: var(--raised); border: 1px solid var(--line);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip[data-kind='connection'] svg { color: var(--accent); }
+.chip:not([data-kind]):not(button) { color: var(--muted); }
+@media (hover: hover) and (pointer: fine) { button.chip:hover { border-color: var(--line-strong); } }
+.graph-scroll { overflow: auto; padding: 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); max-height: 70vh; }
+.graph { position: relative; margin: 8px; }
+.graph svg { position: absolute; inset: 0; overflow: visible; }
+.graph path { fill: none; stroke: var(--line-strong); stroke-width: 1.5; transition: stroke 150ms ease, opacity 150ms ease; }
+.graph path[data-on='true'] { stroke: var(--accent); stroke-width: 2; }
+.graph path[data-dim='true'] { opacity: 0.35; }
+.graph-node {
+  --tone: var(--line-strong);
+  position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 10px; text-align: left;
+  border-radius: 9px; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--tone);
+}
+.graph-node[data-tone='ok'] { --tone: #22c55e; }
+.graph-node[data-tone='fail'] { --tone: #f87171; }
+.graph-node[data-focus='true'] { border-color: var(--accent); border-left-color: var(--tone); box-shadow: 0 0 0 1px var(--accent); }
+.graph-type { font: 500 9.5px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.graph-name { font-size: 12px; font-weight: 540; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.flow-body[data-stale='true'] { opacity: 0.55; transition: opacity 150ms ease; }
+.flow-node .sync-link { margin-left: -4px; }
+.graph-bar { display: flex; align-items: center; gap: 8px; min-height: 30px; min-width: 0; font-size: 12px; }
+.graph-bar strong { flex: 1; min-width: 0; font-weight: 580; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-scroll { cursor: grab; }
+.graph-scroll[data-panning='true'] { cursor: grabbing; user-select: none; }
+.graph-scroll[data-panning='true'] .graph-node { cursor: grabbing; }
+.graph-node[data-dim='true'] { opacity: 0.35; }
+/* Flow skeleton: step label + node cards (type, name, input chip) */
+.skel.skel-label { height: 10px; width: 52px; border-radius: 4px; border: 0; margin-top: 8px; }
+.skel.skel-label:first-child { margin-top: 0; }
+.skel.skel-node { height: auto; padding: 12px; display: grid; grid-template-columns: auto 1fr; gap: 8px 8px; align-items: center; }
+.skel-bar { display: block; height: 12px; border-radius: 4px; background: color-mix(in oklab, var(--text) 7%, transparent); }
+.skel-chip { grid-column: 1 / -1; width: 96px; height: 18px; border-radius: 6px; }
+
+/* Fitting room cards open the room's view */
+.sync.open-card { cursor: pointer; transition: border-color 150ms ease; }
+@media (hover: hover) and (pointer: fine) { .sync.open-card:hover { border-color: var(--line-strong); } }
 .syncs[data-selecting='true'] .sync { cursor: pointer; transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
 @media (hover: hover) and (pointer: fine) { .syncs[data-selecting='true'] .sync:hover { border-color: var(--line-strong); } }
 .sync[data-selected='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: color-mix(in oklab, var(--accent) 5%, var(--surface)); }

@@ -34,12 +34,15 @@ setTimeout(() => {
       const tab = (location.hash.match(/tab=(\w+)/) || [])[1] // Sync requests status tab, e.g. 'results-nav=failed&tab=IN_PROGRESS'
       if (tab) [...s.querySelectorAll('[role=radio]')].find(b => b.textContent.startsWith(tab))?.click()
       if (/bottom/.test(location.hash)) setTimeout(() => { s.querySelector('.body').scrollTop = 1e6 }, 100)
-      // click=A,B,...: click the first button whose text starts with (or aria-label is) each label, in order, 150ms apart
+      // click=A,B,...: click the first button (or focusable card) whose text starts with (or aria-label is) each label, in order, 150ms apart
       const clicks = decodeURIComponent((location.hash.match(/click=([^&]+)/) || [])[1] || '').split(',').filter(Boolean)
       clicks.forEach((label, i) => setTimeout(() => {
-        const b = [...s.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent.trim().startsWith(label))
+        const b = [...s.querySelectorAll('button, [tabindex="0"]')].find(b => b.getAttribute('aria-label') === label || b.textContent.trim().startsWith(label))
         b ? b.click() : log(`click: no button "${label}"`)
       }, 150 * (i + 1)))
+      // find=text: after the clicks, type into the newest search box (e.g. a fitting room's Flow search)
+      const find = decodeURIComponent((location.hash.match(/find=([^&]+)/) || [])[1] || '')
+      if (find) setTimeout(() => type([...s.querySelectorAll('.search input')].at(-1), find), 150 * (clicks.length + 1))
     }, 200)
   }, 300)
 }, 300)

@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react'
 import { call, type HostState, type Output, type Run } from '../api'
 import type { FailedSyncs, SyncRequests } from '../failed-syncs'
-import { dropStalePages, type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins, type ProjectMembers, type UserSearch } from '../projects'
+import { dropStalePages, type Projects, type ProjectConnections, type Connections, type FittingRooms, type FittingRoomConnections, type Pins, type ProjectMembers, type UserSearch } from '../projects'
+import type { FittingRoomFlows } from '../flow'
 import { DEFAULTS, type Settings } from '../themes'
 import { DATA_KEYS, ENV, envKey } from '../table'
 
 export type Store = {
   settings: Settings; host?: HostState; run?: Run; output?: Output; loaded: boolean
   failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections
-  connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins; projectMembers?: ProjectMembers; userSearch?: UserSearch
+  connections?: Connections; fittingRooms?: FittingRooms; fittingRoomConnections?: FittingRoomConnections; fittingRoomFlows?: FittingRoomFlows; pins?: Pins; projectMembers?: ProjectMembers; userSearch?: UserSearch
   syncRequests?: SyncRequests
 }
 // Results are per environment (envKey: staging's are stored as "stag.<key>"); settings, run and host are shared.

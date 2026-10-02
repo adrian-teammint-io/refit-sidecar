@@ -162,6 +162,68 @@
       },
       "timeoutMs": 90000
     },
+    "fitting-room-connections": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/fitting-room-connections.sql",
+        "100",
+        "--fitting_room_id",
+        "{room}",
+        "--q",
+        "{q}",
+        "--sort",
+        "{sort}",
+        "--offset",
+        "{offset}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "room": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        },
+        "q": {
+          "pattern": "(?:[0-9a-f]{2}){0,200}",
+          "default": ""
+        },
+        "sort": {
+          "pattern": "status|service|name",
+          "default": "status"
+        },
+        "offset": {
+          "pattern": "[0-9]{1,5}",
+          "default": "0"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "fitting-room-flow": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/fitting-room-flow.sql",
+        "500",
+        "--fitting_room_id",
+        "{room}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "room": {
+          "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        }
+      },
+      "timeoutMs": 90000
+    },
     "delete-syncs": {
       "exec": "node",
       "args": [

@@ -57,6 +57,11 @@ export const projectUrl = (projectId: string) => (UUID.test(projectId) ? `${APP}
 // refit-app-2 route: /_auth/$projectId/fitting/$fittingRoomId
 export const fittingRoomUrl = (r: { projectId: string; id: string }) =>
   UUID.test(r.projectId) && UUID.test(r.id) ? `${APP}/${r.projectId}/fitting/${r.id}` : undefined
+// One node of it (refit-app-2 route /_auth/$projectId/fitting/$fittingRoomId/$transactionId).
+export const fittingNodeUrl = (r: { projectId: string; id: string }, nodeId: string) => {
+  const room = fittingRoomUrl(r)
+  return room && UUID.test(nodeId) ? `${room}/${nodeId}` : undefined
+}
 
 // What a connection card shows about failures, kept in step with the Sync requests FAIL list: when that list is newer
 // than the card's page (a refetch, or a delete dropping rows), its rows win. Otherwise the page's own values, with the

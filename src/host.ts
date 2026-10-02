@@ -1,6 +1,7 @@
 // Worker side of the native host: owns the one connectNative port (to the relay, host/host.mjs, which forwards to
 // `pnpm server` in a terminal), runs commands, buffers their output. Surfaces never see the port.
 // They read `host` / `output` (storage.session) and `run` plus each command's result key (storage.local).
+import { parseFlow, type Flow, type FittingRoomFlows } from './flow'
 import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, plural, pushLines, splitChunk, type Line } from './term'
 import { parseFailedSyncs, type FailedSyncs, type SyncRequests } from './failed-syncs'
@@ -8,7 +9,7 @@ import { DATA_KEYS, envKey } from './table'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, parseMembers, parseUserHits, fromHex, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
   type Members, type ProjectMembers, type UserSearch,
-  type Projects, type ProjectConnections, type Connections, type FittingRooms, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
+  type Projects, type ProjectConnections, type Connections, type FittingRooms, type FittingRoomConnections, type Pins, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
 } from './projects'
 
 export const HOST = 'com.hoan.refit_sidecar' // keep in sync with NAME in host/install.mjs
@@ -169,7 +170,7 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
   const env = run.args?.env
   const got = await chrome.storage.local.get(DATA_KEYS.map(k => envKey(env, k)))
   const s = dropStalePages(Object.fromEntries(DATA_KEYS.map(k => [k, got[envKey(env, k)]]))) as {
-    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; pins?: Pins; projectMembers?: ProjectMembers
+    failedSyncs?: FailedSyncs; projects?: Projects; projectConnections?: ProjectConnections; connections?: Connections; fittingRooms?: FittingRooms; fittingRoomConnections?: FittingRoomConnections; fittingRoomFlows?: FittingRoomFlows; pins?: Pins; projectMembers?: ProjectMembers
     syncRequests?: SyncRequests
   }
   const save = (o: Record<string, unknown>) => chrome.storage.local.set(Object.fromEntries(Object.entries(o).map(([k, v]) => [envKey(env, k), v])))
@@ -241,6 +242,19 @@ async function storeResult(run: Run, stdout: string): Promise<{ summary?: string
     const query = queryOf<ConnectionsQuery>(run.args, ['q', 'sort'])
     const next = outcome<ProjectConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
     return save({ projectConnections: cacheProject(cache, id, next) })
+  }
+  if (run.command === 'fitting-room-flow' && run.args?.room) {
+    const id = run.args.room
+    const cache = s.fittingRoomFlows ?? {}
+    const next = outcome<Flow>(cache[id], { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFlow(stdout) }))
+    return save({ fittingRoomFlows: cacheProject(cache, id, next) })
+  }
+  if (run.command === 'fitting-room-connections' && run.args?.room) {
+    const id = run.args.room
+    const cache = s.fittingRoomConnections ?? {}
+    const query = queryOf<ConnectionsQuery>(run.args, ['q', 'sort'])
+    const next = outcome<FittingRoomConnections[string]>(cache[id], empty(query), run, () => mergePage(cache[id], query, offset, parseProjectConnections(stdout), at, run.id, c => c.connectionId))
+    return save({ fittingRoomConnections: cacheProject(cache, id, next) })
   }
   if (run.command === 'connections') {
     const query = queryOf<TextQuery>(run.args, ['q'])

@@ -1,11 +1,13 @@
-// Projects (search, filters, pins) and one project's view: its Connections and Members tabs.
+// Projects (search, filters, pins) and one project's view: its Connections and Members tabs. ConnectionsPanel is
+// also a fitting room's list (fitting.tsx).
 import { useState } from 'react'
 import { ago, plural } from '../term'
 import { projectUrl, type FailedSyncs } from '../failed-syncs'
 import {
-  pinnedFor, type Project, type ProjectRef, type Pins, type Projects, type ProjectConnections, type ProjectsQuery, type ConnectionsQuery,
-  type ProjectMembers, type UserSearch,
+  pinnedFor, type Project, type ProjectRef, type Pins, type Projects, type ProjectConnection, type ProjectConnections, type ProjectsQuery,
+  type ConnectionsQuery, type ProjectMembers, type UserSearch, type Page,
 } from '../projects'
+import type { Args, Command } from '../api'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { MembersPanel } from './members'
@@ -93,23 +95,26 @@ export function ProjectView({ project, cache, members, userSearch, pinned, pin, 
       <Segmented label="Project section" value={tab} options={PROJECT_TABS} onChange={setTab} />
       {tab === 'members'
         ? <MembersPanel projectId={project.id} projectName={project.name} members={members?.[project.id]} search={userSearch} {...c} />
-        : <ProjectConnectionsPanel project={project} cache={cache} openFailed={openFailed} fs={fs} {...c} />}
+        : <ConnectionsPanel key={project.id} page={cache?.[project.id]} command="project-connections" extra={{ project: project.id }}
+            none="This project has no data sources yet." openFailed={openFailed} fs={fs} {...c} />}
     </div>
   )
 }
 
-function ProjectConnectionsPanel({ project, cache, openFailed, fs, ...c }: { project: ProjectRef; cache?: ProjectConnections; openFailed: OpenFailed; fs?: FailedSyncs } & Common) {
-  const [query, setQuery] = useState<ConnectionsQuery>(() => cache?.[project.id]?.query ?? { q: '', sort: 'status' })
-  const page = cache?.[project.id]
-  const extra = { project: project.id }
-  const b = useBrowse({ page, query, command: 'project-connections', extra, ...c })
+// A searchable, sortable connection list from one id-scoped command: a project's (project-connections) or a fitting
+// room's (fitting-room-connections). Both return the same columns. Key it by that id so the search state resets.
+export function ConnectionsPanel({ page, command, extra, none, openFailed, fs, ...c }: {
+  page?: Page<ProjectConnection, ConnectionsQuery>; command: Command; extra: Args; none: string; openFailed: OpenFailed; fs?: FailedSyncs
+} & Common) {
+  const [query, setQuery] = useState<ConnectionsQuery>(() => page?.query ?? { q: '', sort: 'status' })
+  const b = useBrowse({ page, query, command, extra, ...c })
   const [selecting, setSelecting] = useState(false)
   return (
     <>
-      <Browse page={page} b={b} run={c.run} now={c.now} command="project-connections" extra={extra} cancel={c.cancel}
+      <Browse page={page} b={b} run={c.run} now={c.now} command={command} extra={extra} cancel={c.cancel}
         tools={<SelectToggle selecting={selecting} setSelecting={setSelecting} rows={page?.rows} />}
         meta={page?.at ? `${page.rows.length}${page.hasMore ? '+' : ''} connections · updated ${ago(page.at, c.now)}` : ''}
-        empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : 'This project has no data sources yet.'} />}
+        empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : none} />}
         rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>
         <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name or platform" />
         <div className="filters">

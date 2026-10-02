@@ -131,7 +131,8 @@ export function App() {
   else body = <ProjectView key={view.project.id} project={pins?.[view.project.id] ?? view.project} cache={projectConnections} members={projectMembers} userSearch={userSearch}
     pinned={!!pins?.[view.project.id]} pin={pin} openProject={openProject} openFailed={openFailed} fs={fs} {...common} />
 
-  const title = view.kind === 'project' ? view.project.name : TITLES[view.kind]
+  const titleOf = (v: View, i: number) => (v.kind === 'project' ? v.project.name : i === 0 && stack.length > 1 ? 'Home' : TITLES[v.kind])
+  const title = titleOf(view, stack.length - 1)
 
   return (
     <div className={`root ${dark ? 'dark' : 'light'}`} style={vars(settings.theme, dark) as React.CSSProperties}>
@@ -152,7 +153,16 @@ export function App() {
         <div className="resize" {...resize.handle} />
         <header className="head">
           {stack.length > 1 ? <IconBtn icon="back" label="Back" onClick={back} /> : <span className="mark"><Icon d="terminal" /></span>}
-          <h1 title={title}>{title}</h1>
+          {/* Breadcrumbs: every view under the current one; clicking one pops back to it. */}
+          <nav className="crumbs" aria-label="Breadcrumb">
+            {stack.slice(0, -1).map((v, i) => (
+              <span key={i} className="crumb">
+                <button onClick={() => setStack(s => s.slice(0, i + 1))} title={titleOf(v, i)}>{titleOf(v, i)}</button>
+                <Icon d="chevron" size={12} />
+              </span>
+            ))}
+            <h1 title={title} aria-current="page">{title}</h1>
+          </nav>
           {ENV === 'stag' && <span className="env-chip" title="staging-app.refit.ai: every command runs on the REFIT_STAG database">STAG</span>}
           {view.kind === 'projects' && <IconBtn icon="plus" label="New project" onClick={() => push({ kind: 'new-project' })} />}
           {view.kind !== 'settings' && <IconBtn icon="gear" label="Settings" onClick={() => push({ kind: 'settings' })} />}

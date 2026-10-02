@@ -221,7 +221,7 @@ Same as claude-sidecar. Full guide in the `ui-system` skill. Tokens come from `t
 - Keep it small: no new dependencies for what a few lines do. Mark deliberate shortcuts with `// ponytail:` and name the ceiling.
 - Pure logic goes in a chrome-free module with an assert test next to it (`*.test.ts`, run by `pnpm test`).
 - Effects use block bodies: `useEffect(() => { x() }, [])`.
-- Commits: conventional title (`feat(host): ...`) + bullet body, no emojis, no AI attribution.
+- Commits: conventional title (`feat(host): ...`) + bullet body, no emojis, no AI attribution. Commit directly on `main` (no feature branches); never push, Hoàn does that.
 - Shell hooks:
   - A PreToolUse hook treats the first line of any heredoc (or the text after `-m`) as a commit message. Write files with the editor.
   - Another hook blocks commands that mention `dist`, `build` or `node_modules` as path words unless the command starts with `npm run build`. Use `npm run build --prefix <repo>`.

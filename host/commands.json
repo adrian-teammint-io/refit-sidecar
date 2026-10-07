@@ -17,7 +17,7 @@
           "default": "prod"
         },
         "sync_status": {
-          "pattern": "FAIL|IN_PROGRESS|FRAGMENTED",
+          "pattern": "FAIL|OTHER|FRAGMENTED",
           "default": "FAIL"
         }
       },
@@ -114,6 +114,8 @@
         "100",
         "--q",
         "{q}",
+        "--platform",
+        "{platform}",
         "--offset",
         "{offset}"
       ],
@@ -126,12 +128,72 @@
           "pattern": "(?:[0-9a-f]{2}){0,200}",
           "default": ""
         },
+        "platform": {
+          "pattern": "all|ADJUST|AIRBRIDGE|APPLE|APPSFLYER_AGG|APPSFLYER_COHORT|APPSFLYER_RAW|CAFE24|GOOGLE_ADS|GOOGLE_ANALYTICS|GOOGLE_SHEET|KAKAO_KEYWORD|KAKAO_MOMENT|META|NAVER_SA|TIKTOK|FILE",
+          "default": "all"
+        },
         "offset": {
           "pattern": "[0-9]{1,5}",
           "default": "0"
         }
       },
       "timeoutMs": 90000
+    },
+    "connection-group": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/connection-group.sql",
+        "100",
+        "--ids",
+        "{ids}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "ids": {
+          "pattern": "[0-9a-fA-F-]{36}(?:,[0-9a-fA-F-]{36}){0,99}"
+        }
+      },
+      "timeoutMs": 90000
+    },
+    "groups-list": {
+      "exec": "node",
+      "args": [
+        "groups.mjs",
+        "{env}",
+        "list"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        }
+      },
+      "timeoutMs": 15000
+    },
+    "groups-edit": {
+      "exec": "node",
+      "args": [
+        "groups.mjs",
+        "{env}",
+        "edit",
+        "{body}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "body": {
+          "pattern": "(?:[0-9a-f]{2}){1,32000}"
+        }
+      },
+      "timeoutMs": 15000
     },
     "fitting-rooms": {
       "exec": "node",
@@ -231,6 +293,50 @@
         "/Applications/tabularis.app/Contents/MacOS/tabularis",
         "{env}",
         "sql/delete-syncs.sql",
+        "100",
+        "--ids",
+        "{ids}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "ids": {
+          "pattern": "[0-9a-fA-F-]{36}(?:,[0-9a-fA-F-]{36}){0,99}"
+        }
+      },
+      "timeoutMs": 330000
+    },
+    "delete-other-syncs": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/delete-other-syncs.sql",
+        "100",
+        "--ids",
+        "{ids}"
+      ],
+      "params": {
+        "env": {
+          "pattern": "prod|stag",
+          "default": "prod"
+        },
+        "ids": {
+          "pattern": "[0-9a-fA-F-]{36}(?:,[0-9a-fA-F-]{36}){0,99}"
+        }
+      },
+      "timeoutMs": 330000
+    },
+    "mark-syncs-fail": {
+      "exec": "node",
+      "args": [
+        "tabularis-query.mjs",
+        "/Applications/tabularis.app/Contents/MacOS/tabularis",
+        "{env}",
+        "sql/mark-syncs-fail.sql",
         "100",
         "--ids",
         "{ids}"

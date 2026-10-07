@@ -5,12 +5,13 @@ import { parseFlow, type Flow } from './flow'
 import { cronText, parseSchedules, rangeLabel, type Schedules } from './schedule'
 import type { Args, Command, HostState, Output, Run } from './api'
 import { flushCarry, plural, pushLines, runOk, splitChunk, type Line } from './term'
-import { parseFailedSyncs, type FailedSyncs } from './failed-syncs'
+import { parseFailedSyncs, SYNC_STATUSES, type FailedSyncs, type SyncStatus } from './failed-syncs'
 import { DATA_KEYS, envKey } from './table'
+import { fromFiles, opSummary, refreshGroups, type GroupFiles, type GroupOp } from './groups'
 import type { Data } from './shared/store'
 import {
   parseProjects, parseProjectConnections, parseConnections, parseFittingRooms, parseMembers, parseUserHits, fromHex, mergePage, cacheProject, queryOf, refreshPins, dropStalePages,
-  type Members, type UserSearch, type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery, type TextQuery,
+  type Members, type UserSearch, type Projects, type ProjectConnections, type Connections, type FittingRooms, type ProjectsQuery, type ConnectionsQuery, type TextQuery, type ConnectionSearch,
 } from './projects'
 
 export const HOST = 'com.hoan.refit_sidecar' // keep in sync with NAME in host/install.mjs
@@ -63,7 +64,7 @@ export function connect() {
 // request for the same command supersedes the running one: it is cancelled and its result thrown away, so typing
 // in a search box never waits behind a stale query.
 // A write never queues or supersedes: it must run when you confirm it, or be refused so you know it didn't.
-const WRITES: Command[] = ['delete-syncs', 'add-project-user', 'create-project', 'update-schedules']
+const WRITES: Command[] = ['delete-syncs', 'delete-other-syncs', 'mark-syncs-fail', 'add-project-user', 'create-project', 'update-schedules', 'groups-edit'] // groups-edit: a vault note, refused while busy so it is never dropped from the queue
 export function startRun(command: Command, args: Args = {}): string {
   if (current && WRITES.includes(command)) throw new Error(`Busy: wait for ${current.run.command} to finish, then try again`)
   if (current) {
@@ -199,6 +200,20 @@ async function writeResult(run: Run, stdout: string, s: Data, save: Save): Promi
     if (s.failedSyncs) await save({ failedSyncs: { ...s.failedSyncs, rows: s.failedSyncs.rows.filter(r => !gone.includes(r.id.toLowerCase())) } })
     return { summary }
   }
+  if (run.command === 'delete-other-syncs' || run.command === 'mark-syncs-fail') {
+    const marking = run.command === 'mark-syncs-fail'
+    const refetch = { command: 'failed-syncs' as Command, args: { env, sync_status: 'OTHER' } }
+    const asked = (run.args?.ids ?? '').toLowerCase().split(',')
+    let gone: string[] = []
+    try { gone = (writeRows(stdout).rows ?? []).map(r => String(r[0]).toLowerCase()) } catch { return { summary: `${marking ? 'Mark' : 'Delete'} finished; could not read the result`, then: refetch } }
+    const summary = marking ? `Marked ${gone.length} of ${plural(asked.length, 'sync request')} as FAIL` : `Deleted ${gone.length} of ${plural(asked.length, 'sync request')}`
+    if (!gone.length) return { summary, then: refetch }
+    // Gone from this tab either way (a FRAGMENTED row from that tab's list too); marked rows are FAIL now, so the FAIL
+    // list is fetched again to show them.
+    const drop = (l?: FailedSyncs) => l && { ...l, rows: l.rows.filter(r => !gone.includes(r.id.toLowerCase())) }
+    await save({ syncRequests: { ...s.syncRequests, OTHER: drop(s.syncRequests?.OTHER), FRAGMENTED: drop(s.syncRequests?.FRAGMENTED) } })
+    return marking ? { summary, then: { command: 'failed-syncs' as Command, args: { env } } } : { summary }
+  }
   if (run.command === 'add-project-user') {
     const reload = { command: 'project-members' as Command, args: { env, project: run.args?.project ?? '' } }
     let added = 0
@@ -212,6 +227,14 @@ async function writeResult(run: Run, stdout: string, s: Data, save: Save): Promi
     try { n = writeRows(stdout).rows?.length ?? 0 } catch { return { summary: 'Update finished; could not read the result', then: reload } }
     const to = `${cronText(`0 ${run.args?.hour} * * *`)} · ${rangeLabel(run.args?.range ?? '')}`
     return { summary: n ? `Updated ${plural(n, 'connection')}: ${to}` : 'No scheduled connections in those projects; nothing changed', then: reload }
+  }
+  // A connection group note changed (host/groups.mjs): it prints the whole list back, which replaces the cache.
+  if (run.command === 'groups-edit') {
+    try {
+      const op = JSON.parse(fromHex(run.args?.body ?? '')) as GroupOp
+      await save({ groups: fromFiles(JSON.parse(stdout) as GroupFiles, s.groups) })
+      return { summary: opSummary(op) }
+    } catch { return { summary: 'Group saved; could not read the result', then: { command: 'groups-list', args: { env } } } }
   }
   if (run.command === 'create-project') {
     try {
@@ -244,10 +267,10 @@ async function readResult(run: Run, stdout: string, s: Data, save: Save): Promis
     return save({ projectSchedules: outcome<Schedules>(undefined, { ...base, rows: [] }, run, () => ({ ...base, rows: parseSchedules(stdout) })) })
   }
   if (run.command === 'failed-syncs') {
-    const status = run.args?.sync_status ?? 'FAIL'
+    const status = (run.args?.sync_status ?? 'FAIL') as SyncStatus
     const fresh = (prev?: FailedSyncs) => outcome<FailedSyncs>(prev, { at: 0, runId: run.id, rows: [], truncated: false }, run, () => ({ at, runId: run.id, ...parseFailedSyncs(stdout) }))
     if (status === 'FAIL') return save({ failedSyncs: fresh(s.failedSyncs) })
-    if (status !== 'IN_PROGRESS' && status !== 'FRAGMENTED') return
+    if (!SYNC_STATUSES.includes(status)) return
     return save({ syncRequests: { ...s.syncRequests, [status]: fresh(s.syncRequests?.[status]) } })
   }
   if (run.command === 'fitting-room-flow' && run.args?.room) {
@@ -275,8 +298,18 @@ async function readResult(run: Run, stdout: string, s: Data, save: Save): Promis
     return save({ [key]: cacheProject(cache, id, next) })
   }
   if (run.command === 'connections') {
-    const query = queryOf<TextQuery>(run.args, ['q'])
+    const query = queryOf<ConnectionSearch>(run.args, ['q', 'platform'])
     return save({ connections: outcome<Connections>(s.connections, empty(query), run, () => mergePage(s.connections, query, offset, parseConnections(stdout), at, run.id, c => c.connectionId)) })
+  }
+  // Connection group notes in the vault (host/groups.mjs), merged with the cached status snapshots.
+  if (run.command === 'groups-list') {
+    if (!runOk(run)) return
+    try { return save({ groups: fromFiles(JSON.parse(stdout) as GroupFiles, s.groups) }) } catch { return }
+  }
+  // A saved group's live status: folded into the stored snapshots (a failed run keeps them; its pill tells why).
+  if (run.command === 'connection-group') {
+    if (!runOk(run) || !s.groups) return
+    try { return save({ groups: refreshGroups(s.groups, (run.args?.ids ?? '').split(','), parseConnections(stdout), at) }) } catch { return }
   }
   if (run.command === 'fitting-rooms') {
     const query = queryOf<TextQuery>(run.args, ['q'])

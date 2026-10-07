@@ -1,7 +1,7 @@
 // Every drawer view in one table. Adding a view: add its kind to `View`, then an entry to VIEWS (title, render, and
 // optionally a header button). App does the rest: the stack, Back / Esc, breadcrumbs, header, error boundary.
 import type { ReactNode } from 'react'
-import type { FittingRoom, Project, ProjectRef, ProjectsQuery } from '../projects'
+import type { FittingRoom, Project, ProjectRef, ProjectsQuery, ConnectionSearch } from '../projects'
 import type { useStore } from '../shared/store'
 import type { IconName } from '../shared/icons'
 import type { Settings } from '../themes'
@@ -12,6 +12,7 @@ import type { Common, Find } from './browse'
 import { Home } from './home'
 import { ProjectsView, ProjectView } from './projects'
 import { ConnectionsView } from './connections'
+import { GroupView } from './groups'
 import { FittingRoomsView, FittingRoomView } from './fitting'
 import { ScheduleView } from './schedule'
 
@@ -20,6 +21,7 @@ export type View =
   | { kind: 'failed'; conn?: { id: string; name: string } } // conn: only that connection's failures
   | { kind: 'projects' }
   | { kind: 'connections' }
+  | { kind: 'conn-group'; id: string; name: string } // a saved connection group (src/groups.ts), id = groupKey(name)
   | { kind: 'fitting' }
   | { kind: 'fitting-room'; room: FittingRoom }
   | { kind: 'new-project'; from?: ProjectRef } // from: Duplicate pre-fills the form from this project and its members
@@ -31,9 +33,9 @@ type State<T> = [T, (v: T) => void]
 // What a view can use: stored data, the run slot (`common`), navigation, and the search state App keeps for Back.
 export type Ctx = {
   store: ReturnType<typeof useStore>; common: Common; dark: boolean; saveSettings: (s: Partial<Settings>) => void
-  push: (v: View) => void; replace: (v: View) => void
+  push: (v: View) => void; replace: (v: View) => void; back: () => void
   openProject: (p: ProjectRef) => void; openFailed: (c: { connectionId: string; name: string }) => void; find: Find; pin: (p: Project) => void
-  queries: { projects: State<ProjectsQuery>; connections: State<{ q: string }>; fitting: State<{ q: string }> }
+  queries: { projects: State<ProjectsQuery>; connections: State<ConnectionSearch>; fitting: State<{ q: string }> }
 }
 
 type Of<K extends View['kind']> = Extract<View, { kind: K }>
@@ -70,7 +72,13 @@ export const VIEWS: { [K in View['kind']]: Def<K> } = {
   connections: {
     title: 'Connections',
     render: (_, x) => <ConnectionsView page={x.store.connections} query={x.queries.connections[0]} setQuery={x.queries.connections[1]}
-      openProject={x.openProject} openFailed={x.openFailed} fs={x.store.failedSyncs} {...x.common} />,
+      openProject={x.openProject} openFailed={x.openFailed} fs={x.store.failedSyncs} groups={x.store.groups}
+      openGroup={(id, name) => x.push({ kind: 'conn-group', id, name })} {...x.common} />,
+  },
+  'conn-group': {
+    title: v => v.name,
+    render: (v, x) => <GroupView key={v.id} id={v.id} groups={x.store.groups} search={x.store.connections} fs={x.store.failedSyncs} openProject={x.openProject}
+      openFailed={x.openFailed} renamed={(id, name) => x.replace({ kind: 'conn-group', id, name })} back={x.back} {...x.common} />,
   },
   fitting: {
     title: 'Fitting rooms',

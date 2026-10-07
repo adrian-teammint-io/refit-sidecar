@@ -3,13 +3,15 @@ import { call, type Args, type Command } from '../api'
 import { vars } from '../themes'
 import { actionFor, keyLabel, keysOf } from '../keybinds'
 import { plural, runOk, runStatus } from '../term'
-import { togglePin, type Project, type ProjectRef, type ProjectsQuery } from '../projects'
+import { togglePin, type Project, type ProjectRef, type ProjectsQuery, type ConnectionSearch } from '../projects'
 import { ENV, envKey } from '../table'
 import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
 import { Icon, IconBtn } from '../shared/icons'
 import { HostSetup, hostProblem, hostLabel, hostTone } from '../shared/HostSetup'
 import { defOf, titleOf, type Ctx, type View } from './routes'
 import { useResize } from './resize'
+import { WHAT } from './failed'
+import type { SyncStatus } from '../failed-syncs'
 
 // Search state for a browse view, kept here so Back keeps what you typed. Seeded once from the stored page's query.
 function useQuery<Q>(initial: Q, stored: Q | undefined, loaded: boolean) {
@@ -41,7 +43,7 @@ export function App() {
   const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
   const queries = {
     projects: useQuery<ProjectsQuery>({ q: '', status: 'all', sort: 'active' }, projects?.query, loaded),
-    connections: useQuery({ q: '' }, connections?.query, loaded),
+    connections: useQuery<ConnectionSearch>({ q: '', platform: 'all' }, connections?.query && { ...connections.query, platform: connections.query.platform ?? 'all' }, loaded), // pages saved before the filter have no platform
     fitting: useQuery({ q: '' }, fittingRooms?.query, loaded),
   }
   const [toast, setToast] = useState('')
@@ -64,11 +66,11 @@ export function App() {
     push({ kind: 'project', project: full })
   }
   const openFailed = (c: { connectionId: string; name: string }) => push({ kind: 'failed', conn: { id: c.connectionId, name: c.name.trim() } })
-  // Jumps to Home › Projects (or Connections) with q typed into its search, as if opened from Home. Status resets to
-  // All so a paused project isn't filtered out.
+  // Jumps to Home › Projects (or Connections) with q typed into its search, as if opened from Home. Status / platform
+  // reset to All so the match isn't filtered out.
   const find = (view: 'projects' | 'connections', q: string) => {
     if (view === 'projects') queries.projects[1]({ ...queries.projects[0], q, status: 'all' })
-    else queries.connections[1]({ q })
+    else queries.connections[1]({ q, platform: 'all' })
     setStack([{ kind: 'home' }, { kind: view }])
   }
   const pin = (p: Project) => chrome.storage.local.set({ [envKey(ENV, 'pins')]: togglePin(pins ?? {}, p, Date.now()) })
@@ -79,9 +81,9 @@ export function App() {
     if (!runOk(run)) return flash(run.tail ?? runStatus(run, Date.now()).label)
     if (run.summary) flash(run.summary)
     else if (run.command === 'failed-syncs') {
-      const status = run.args?.sync_status
-      const k = status === 'IN_PROGRESS' || status === 'FRAGMENTED' ? syncRequests?.[status]?.rows.length ?? 0 : n
-      flash(plural(k, `${status === 'IN_PROGRESS' ? 'in progress' : status === 'FRAGMENTED' ? 'fragmented' : 'failed'} sync`))
+      const status = (run.args?.sync_status ?? 'FAIL') as SyncStatus
+      const k = status === 'FAIL' ? n : syncRequests?.[status]?.rows.length ?? 0
+      flash(plural(k, `${WHAT[status] ?? 'failed'} sync`))
     }
   }, [run?.endedAt])
 
@@ -106,7 +108,7 @@ export function App() {
 
   const ctx: Ctx = {
     store, common: { run, now, ready, exec, cancel }, dark, saveSettings: s => saveSettings(settings, s), queries,
-    push, replace: v => setStack(s => [...s.slice(0, -1), v]), openProject, openFailed, find, pin,
+    push, replace: v => setStack(s => [...s.slice(0, -1), v]), back, openProject, openFailed, find, pin,
   }
   const def = defOf(view)
   const body = !loaded ? null : hostProblem(host) && !def.noHost ? <HostSetup host={host} /> : def.render(view, ctx)

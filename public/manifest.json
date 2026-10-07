@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "nativeMessaging",
-    "fontSettings"
+    "fontSettings",
+    "activeTab"
   ],
   "icons": {
     "16": "icons/icon-16.png",

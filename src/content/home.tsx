@@ -30,7 +30,7 @@ export function Home({ pins, failedSyncs: fs, now, open, openProject }: {
       <p className="eyebrow">Checks</p>
       <div className="cmd-list">
         <CommandRow icon="alert" hue={75} title="Sync requests" count={fs?.at ? n : undefined} onClick={() => open('failed')}
-          sub={fs?.at ? `${n} failed · updated ${ago(fs.at, now)}` : 'FAIL, IN_PROGRESS and FRAGMENTED sync_requests'} />
+          sub={fs?.at ? `${n} failed · updated ${ago(fs.at, now)}` : 'FAIL and every other status but SUCCESS'} />
       </div>
       <p className="eyebrow">Search</p>
       <div className="cmd-list">

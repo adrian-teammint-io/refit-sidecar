@@ -10,6 +10,10 @@ export const stagger = (i: number) => ({ '--i': Math.min(i, 12) }) as CSSPropert
 export const pickOnClick = (selecting: boolean, toggle: () => void) =>
   selecting ? (e: MouseEvent) => { if (!(e.target as Element).closest('a, button')) toggle() } : undefined
 
+// Out of select mode, double-clicking a card (not its links or buttons) enters select mode with that card picked.
+export const pickOnDoubleClick = (can: boolean, start: () => void) =>
+  can ? (e: MouseEvent) => { if ((e.target as Element).closest('a, button')) return; getSelection()?.removeAllRanges(); start() } : undefined
+
 // A card's top row: select check, badge, title (a button with `onTitle`), then the view's chips, then the open link.
 export function CardHead({ badge, title, onTitle, check, link, children }: {
   badge: ReactNode; title: string; children?: ReactNode

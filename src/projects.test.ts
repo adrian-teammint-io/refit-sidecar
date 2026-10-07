@@ -4,7 +4,7 @@ import {
   parseProjects, parseMembers, parseProjectConnections, parseConnections, parseFittingRooms, toHex, fromHex, cleanQuery, toArgs, queryOf,
   mergePage, cacheProject, togglePin, refreshPins, pinnedFor, dropStalePages, BATCH, MAX_CACHED_PROJECTS, type Project, type ProjectsQuery,
 } from './projects.ts'
-import { connectionUrl, projectUrl, fittingRoomUrl } from './links.ts'
+import { connectionUrl, projectUrl, fittingRoomUrl, parseConnectionPage } from './links.ts'
 
 const sample = (f: string) => readFileSync(new URL(`./samples/${f}`, import.meta.url), 'utf8')
 
@@ -101,4 +101,10 @@ const refreshed = refreshPins(pins, [P(2, { name: 'Alpha 2', failed: 4 }), P(9)]
 assert.equal(refreshed.p2.name, 'Alpha 2')
 assert.equal(refreshed.p2.pinnedAt, 6)
 assert.equal(refreshPins(refreshed, [P(2, { name: 'Alpha 2', failed: 4 })]), undefined) // nothing changed: no write
+// the popup's current tab: a connection page on either environment, nothing else
+const PJ = '799a63f3-235c-46ce-9141-12e28915539f', CN = '63f012fe-ec29-4f08-a649-d9067b55b1ac'
+assert.deepEqual(parseConnectionPage(`https://app.refit.ai/${PJ}/datasources/service/${CN.toUpperCase()}?tab=columns`), { env: 'prod', projectId: PJ, connectionId: CN, kind: 'SERVICE' })
+assert.deepEqual(parseConnectionPage(`https://staging-app.refit.ai/${PJ}/datasources/file/${CN}/`), { env: 'stag', projectId: PJ, connectionId: CN, kind: 'FILE' })
+for (const u of [undefined, '', `https://app.refit.ai/${PJ}`, `https://app.refit.ai/${PJ}/datasources/service/${CN}/edit`, `https://evil.com/app.refit.ai/${PJ}/datasources/service/${CN}`, `http://app.refit.ai/${PJ}/datasources/service/${CN}`])
+  assert.equal(parseConnectionPage(u), undefined, String(u))
 console.log('projects ok')

@@ -67,11 +67,13 @@ export function ThemePicker({ settings, dark, onChange }: { settings: Settings; 
       <Segmented label="Color mode" value={settings.mode} options={MODES} onChange={mode => onChange({ mode })} />
       <div className="themes" role="radiogroup" aria-label="Theme">
         {Object.entries(THEMES).map(([key, t]) => {
-          const [bg, surface, , text, , accent] = t[dark ? 'dark' : 'light']
+          const [bg, surface, , text, muted, accent] = t[dark ? 'dark' : 'light']
           return (
             <button key={key} role="radio" aria-checked={settings.theme === key} className="theme" onClick={() => onChange({ theme: key })}>
-              <span className="swatch" style={{ background: bg, color: text }}>
-                <span style={{ background: surface }} /><span style={{ background: accent }} />
+              {/* A tiny card: title and muted lines on the surface, the accent beside it */}
+              <span className="swatch" style={{ background: bg }}>
+                <span style={{ background: surface }}><i style={{ background: text }} /><i style={{ background: muted }} /></span>
+                <span style={{ background: accent }} />
               </span>
               {t.label}
             </button>

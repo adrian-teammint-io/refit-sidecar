@@ -66,7 +66,7 @@ export const PARAMS = {
   project_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   offset: v => { if (!/^\d{1,5}$/.test(v)) throw new Error('must be a whole number'); return String(Number(v)) },
   status: ENUM('all', 'ACTIVE', 'PAUSED'),
-  sync_status: ENUM('FAIL', 'IN_PROGRESS', 'FRAGMENTED'), // the drawer's Sync requests tabs (failed-syncs.sql)
+  sync_status: ENUM('FAIL', 'OTHER', 'FRAGMENTED'), // the drawer's Sync requests tabs (failed-syncs.sql; OTHER: not SUCCESS nor FAIL)
   sort: ENUM('active', 'name', 'recent', 'status', 'service'),
   user_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
   fitting_room_id: v => { if (!UUID.test(v)) throw new Error('must be a UUID'); return `'${v.toLowerCase()}'` },
@@ -115,6 +115,9 @@ PARAMS.daily_cron = v => {
 }
 // sync_schedule_range values: which dates a scheduled sync fetches
 PARAMS.range = ENUM('DAY', 'LAST_2DAYS', 'WEEK', 'MONTH', 'THIS_MONTH', 'THIS_2MONTH')
+// connections filter: a service (refit-gql ApiService), FILE (a file connection has no service), or all
+PARAMS.platform = ENUM('all', 'ADJUST', 'AIRBRIDGE', 'APPLE', 'APPSFLYER_AGG', 'APPSFLYER_COHORT', 'APPSFLYER_RAW', 'CAFE24', 'GOOGLE_ADS',
+  'GOOGLE_ANALYTICS', 'GOOGLE_SHEET', 'KAKAO_KEYWORD', 'KAKAO_MOMENT', 'META', 'NAVER_SA', 'TIKTOK', 'FILE')
 
 // Tabularis connections by environment (ids from Tabularis's connections.json: REFIT_ PROD, REFIT_STAG). Commands
 // pass {env}; the drawer picks it from the page's hostname, so a page can only ever choose between these two.
@@ -139,6 +142,8 @@ const shape = sql => new RegExp('^' + sql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 export const WRITES = {
   'sql/create-project.sql': shape(CREATE_PROJECT),
   'sql/delete-syncs.sql': new RegExp(`^delete from sync_request where status = 'FAIL' and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
+  'sql/delete-other-syncs.sql': new RegExp(`^delete from sync_request where status not in \\('SUCCESS', 'FAIL'\\) and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
+  'sql/mark-syncs-fail.sql': new RegExp(`^update sync_request set status = 'FAIL', reason = 'Manually mark as FAIL', update_at = now\\(\\) where status not in \\('SUCCESS', 'FAIL'\\) and id in \\(${U}(?:, ${U})*\\) returning id$`, 'i'),
   'sql/update-schedules.sql': new RegExp(`^update sync_schedule set cron = '0 (?:[4-9]|1\\d|2[0-3]) \\* \\* \\*', range = '(?:DAY|LAST_2DAYS|WEEK|MONTH|THIS_MONTH|THIS_2MONTH)', skip = false, update_at = now\\(\\) where connection_id in \\(select id from connection where project_id in \\(${U}(?:, ${U})*\\)\\) returning connection_id$`, 'i'),
   'sql/add-project-user.sql': new RegExp(`^insert into refit_user_project_relation \\(user_id, project_id, role\\) values \\(${U}, ${U}, '(?:admin|editor|viewer)'\\) on conflict \\(project_id, user_id\\) do nothing returning user_id, role$`, 'i'),
 }

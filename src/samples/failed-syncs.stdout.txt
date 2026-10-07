@@ -15,7 +15,8 @@
     "update_at",
     "recovered_start",
     "recovered_end",
-    "recovered_at"
+    "recovered_at",
+    "status"
   ],
   "rows": [
     [
@@ -34,7 +35,8 @@
       "2026-10-01T06:36:26Z",
       null,
       null,
-      null
+      null,
+      "FAIL"
     ]
   ],
   "affected_rows": 0,

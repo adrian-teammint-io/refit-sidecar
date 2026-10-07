@@ -51,12 +51,16 @@ export type FittingRoom = {
 export type ProjectsQuery = { q: string; status: 'all' | 'ACTIVE' | 'PAUSED'; sort: 'active' | 'name' | 'recent' }
 export type ConnectionsQuery = { q: string; sort: 'status' | 'service' | 'name' }
 export type TextQuery = { q: string }
+// The Connections search's platform filter: a service (refit-gql ApiService) or FILE, the values platform() shows.
+export const PLATFORMS = ['ADJUST', 'AIRBRIDGE', 'APPLE', 'APPSFLYER_AGG', 'APPSFLYER_COHORT', 'APPSFLYER_RAW', 'CAFE24', 'GOOGLE_ADS',
+  'GOOGLE_ANALYTICS', 'GOOGLE_SHEET', 'KAKAO_KEYWORD', 'KAKAO_MOMENT', 'META', 'NAVER_SA', 'TIKTOK', 'FILE'] as const
+export type ConnectionSearch = { q: string; platform: 'all' | typeof PLATFORMS[number] }
 export type Page<T, Q> = { at: number; runId: string; query: Q; rows: T[]; hasMore: boolean; error?: string }
 
 // storage.local keys
 export type Projects = Page<Project, ProjectsQuery>
 export type ProjectConnections = Record<string, Page<ProjectConnection, ConnectionsQuery>> // by project id
-export type Connections = Page<ConnectionHit, TextQuery>
+export type Connections = Page<ConnectionHit, ConnectionSearch>
 export type FittingRooms = Page<FittingRoom, TextQuery>
 export type FittingRoomConnections = Record<string, Page<ProjectConnection, ConnectionsQuery>> // by fitting room id, rows from parseProjectConnections
 export type Pins = Record<string, Project & { pinnedAt: number }> // snapshot, refreshed whenever the project is fetched again

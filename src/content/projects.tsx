@@ -141,7 +141,7 @@ export function ConnectionsPanel({ page, command, extra, none, openFailed, fs, .
         meta={page?.at ? `${pageCount(page, 'connections')} · updated ${ago(page.at, c.now)}` : ''}
         empty={<Empty icon="search" title={query.q ? 'No matching connections' : 'No connections'} text={query.q ? 'Try other words.' : none} />}
         rowsFor={rows => <ConnectionList rows={rows} now={c.now} groupBy={page?.query.sort === 'service' ? 'service' : undefined} openFailed={openFailed} fs={fs} pageAt={page?.at ?? 0} selecting={selecting} setSelecting={setSelecting} />}>
-        <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name or platform" />
+        <SearchBox value={query.q} onChange={q => setQuery({ ...query, q })} placeholder="Filter connections by name, platform or id" />
         <div className="filters">
           <Segmented label="Sort connections" value={query.sort} options={CONN_SORTS} onChange={sort => setQuery({ ...query, sort })} />
         </div>

@@ -1,6 +1,35 @@
 @import '../ui.css';
 
 body { margin: 0; width: 420px; }
+
+/* Connection search (Search.tsx) */
+.p-search { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.p-search-box { position: relative; display: flex; }
+.p-search-box svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.p-search-box .text-input { flex: 1; min-width: 0; padding-left: 36px; }
+.p-hint { font-size: 12px; padding: 6px 2px; margin: 0; }
+.p-search .err { margin: 0; font-size: 12px; }
+.p-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 360px; overscroll-behavior: contain; }
+.p-hits li { display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 9px; }
+@media (hover: hover) and (pointer: fine) { .p-hits li:not(.p-hint):hover { background: var(--hover); } }
+.p-hits .badge { flex-shrink: 0; }
+.p-hit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.p-hit-main strong { font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-hit-main .muted { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-hits .btn { flex-shrink: 0; }
+.p-env { flex-shrink: 0; font: 700 10px/1 var(--mono); letter-spacing: 0.06em; padding: 4px 6px; border-radius: 5px; background: #f59e0b; color: #1c1300; }
+
+/* Add the current tab's connection to a group (AddToGroup.tsx) */
+.p-group { display: flex; flex-direction: column; gap: 6px; }
+.p-group-conn { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.p-group-conn strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-group-id { font-size: 11px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-group .cgroup-list-head { margin-top: 6px; }
+.p-group-list .proj { padding: 7px 8px; }
+.p-group-list .proj:disabled { cursor: default; opacity: 1; }
+.p-group-list .proj > svg:last-child { flex-shrink: 0; }
+.p-group-list .proj:disabled > svg:last-child { color: var(--muted); }
+.p-group .err { margin: 0; }
 .popup {
   overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 12px; max-height: 600px;
   background:
@@ -12,9 +41,8 @@ body { margin: 0; width: 420px; }
 /* Header */
 .p-head { display: flex; align-items: center; gap: 6px; }
 .p-head h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; flex: 1; }
-.p-updated { font-size: 11.5px; }
 
-/* Count card */
+/* Cards */
 .card {
   border-radius: 14px; padding: 16px; background: var(--surface); border: 1px solid var(--line);
   box-shadow: 0 1px 0 color-mix(in oklab, var(--text) 4%, transparent) inset;
@@ -22,31 +50,6 @@ body { margin: 0; width: 420px; }
 }
 @keyframes card-in { from { opacity: 0; transform: translateY(4px); } }
 .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
-/* flex-shrink 0: the popup column is height-capped; the list scrolls, not this card */
-.p-count { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-shrink: 0; }
-.p-num { display: block; font-size: 38px; font-weight: 650; letter-spacing: -0.04em; line-height: 1; margin-top: 8px; }
-.p-num svg { margin-left: 8px; vertical-align: 4px; color: #22c55e; }
-.light .p-num svg { color: #16a34a; }
-.p-where { font-size: 11.5px; margin-top: 8px; }
-/* Tone: a faint red wash + red number when something failed, so the count reads before the words do */
-.p-count[data-tone='fail'] {
-  border-color: color-mix(in oklab, #f87171 30%, var(--line));
-  background: radial-gradient(80% 120% at 0% 100%, color-mix(in oklab, #f87171 12%, transparent), transparent 70%), var(--surface);
-}
-.p-count[data-tone='fail'] .p-num { color: #f87171; }
-.light .p-count[data-tone='fail'] .p-num { color: #b91c1c; }
-.p-count-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
-.p-count-side .pill { max-width: 200px; }
-
-.p-note { font-size: 12.5px; padding: 18px 8px; text-align: center; text-wrap: balance; }
-.p-note svg { vertical-align: -2px; margin-right: 4px; }
-.p-more { justify-content: center; height: 32px; font-size: 12px; }
-.p-term { height: 400px; display: flex; flex-direction: column; }
-.popup .syncs { overflow-y: auto; max-height: 300px; overscroll-behavior: contain; gap: 6px; }
-.popup .sync { padding: 10px 12px; gap: 5px; }
-.popup .sync-reason { display: block; white-space: nowrap; text-overflow: ellipsis; padding: 5px 8px; }
-.popup .sync-foot { display: none; }
-
 .p-foot { display: flex; justify-content: space-between; font-size: 11px; border-top: 1px solid var(--line); padding: 10px 0 0; }
 
 /* Settings view */
@@ -57,7 +60,9 @@ body { margin: 0; width: 420px; }
 .p-settings .themes { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .p-settings .theme { font-size: 11px; padding: 5px 5px 7px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-settings .swatch { height: 26px; border-radius: 6px; padding: 4px; }
-.p-settings .swatch span { height: 7px; }
+.p-settings .swatch span:last-child { height: 7px; }
+.p-settings .swatch span:first-child { gap: 2px; padding: 0 4px; }
+.p-settings .swatch i { height: 2px; }
 .p-links { display: flex; gap: 14px; align-items: center; font-size: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .p-links a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line-strong); transition: border-color 150ms ease; }
 @media (hover: hover) and (pointer: fine) { .p-links a:hover { border-color: var(--accent); } }

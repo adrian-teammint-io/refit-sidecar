@@ -70,6 +70,20 @@ assert.throws(() => checkQuery('sql/projects.sql', del), /only a single SELECT/)
 assert.throws(() => checkQuery('sql/delete-syncs.sql', 'DELETE FROM sync_request'), /approved DELETE/)
 assert.throws(() => checkQuery('sql/delete-syncs.sql', "DELETE FROM sync_request WHERE status = 'FAIL' AND id IN (SELECT id FROM sync_request) RETURNING id"), /approved DELETE/)
 assert.throws(() => checkQuery('sql/delete-syncs.sql', `${del}; DELETE FROM project`), /single statement/)
+// delete-other-syncs: only rows neither SUCCESS nor FAIL, exact shape
+const ot = bindParams(stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/delete-other-syncs.sql'), 'utf8')), { ids: `${P},${Q}` })
+assert.equal(checkQuery('sql/delete-other-syncs.sql', ot), true)
+assert.throws(() => checkQuery('sql/delete-other-syncs.sql', ot.replace("('SUCCESS', 'FAIL')", "('FAIL')")), /approved/)
+assert.throws(() => checkQuery('sql/delete-other-syncs.sql', ot.replace(" NOT IN", " IN")), /approved/)
+assert.throws(() => checkQuery('sql/delete-other-syncs.sql', ot.replace(" AND id IN", " OR id IN")), /approved/)
+assert.throws(() => checkQuery('sql/delete-syncs.sql', ot), /approved/) // each file only its own statement
+// mark-syncs-fail: only rows neither SUCCESS nor FAIL, fixed status and reason
+const mk = bindParams(stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/mark-syncs-fail.sql'), 'utf8')), { ids: `${P},${Q}` })
+assert.equal(checkQuery('sql/mark-syncs-fail.sql', mk), true)
+assert.throws(() => checkQuery('sql/mark-syncs-fail.sql', mk.replace("status = 'FAIL',", "status = 'SUCCESS',")), /approved/)
+assert.throws(() => checkQuery('sql/mark-syncs-fail.sql', mk.replace("'Manually mark as FAIL'", "'x'")), /approved/)
+assert.throws(() => checkQuery('sql/mark-syncs-fail.sql', mk.replace(" AND id IN", " OR id IN")), /approved/)
+assert.throws(() => checkQuery('sql/mark-syncs-fail.sql', ot), /approved/)
 assert.throws(() => checkQuery('sql/projects.sql', 'SELECT 1; DROP TABLE x'), /single statement/)
 // create-project: the real file, bound, is exactly its approved shape; bad values never reach SQL
 const cp = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/create-project.sql'), 'utf8'))
@@ -116,10 +130,23 @@ assert.throws(() => bindParams(frc, { ...frcOk, fitting_room_id: "x' OR '1'='1" 
 const flow = bindParams(stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/fitting-room-flow.sql'), 'utf8')), { fitting_room_id: P })
 assert.ok(flow.includes(`t.fitting_room_id = '${P}'`))
 assert.equal(checkQuery('sql/fitting-room-flow.sql', flow), false)
+// connections: the platform filter is an enum literal compared as text ('all' would not cast to the service enum)
+const conn = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/connections.sql'), 'utf8'))
+const connSql = bindParams(conn, { q: '', platform: 'META', offset: '0' })
+assert.ok(connSql.includes("('META' = 'all' OR coalesce(sc.service, c.type)::text = 'META')"))
+assert.equal(checkQuery('sql/connections.sql', connSql), false)
+assert.throws(() => bindParams(conn, { q: '', platform: "META' OR '1'='1", offset: '0' }), /platform must be one of/)
+// connection-group: a saved group's ids as an IN list, a plain read
+const cg = stripLeadingComments(readFileSync(join(import.meta.dirname, 'sql/connection-group.sql'), 'utf8'))
+const cgSql = bindParams(cg, { ids: `${P},${P.toUpperCase()}` })
+assert.ok(cgSql.includes(`c.id IN ('${P}', '${P}')`))
+assert.equal(checkQuery('sql/connection-group.sql', cgSql), false)
+assert.throws(() => bindParams(cg, { ids: `${P}) OR (true` }), /ids must be/)
 assert.deepEqual(Object.keys(CONNECTIONS), ['prod', 'stag'])
 for (const [name, spec] of Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, 'commands.json'), 'utf8')).commands)) {
   assert.equal(spec.params.env?.pattern, 'prod|stag', `${name} takes env`)
-  assert.equal(spec.args[2], '{env}', `${name} passes env as the connection`)
+  if (spec.args[0] === 'tabularis-query.mjs') assert.equal(spec.args[2], '{env}', `${name} passes env as the connection`)
+  else assert.deepEqual(spec.args.slice(0, 2), ['groups.mjs', '{env}'], `${name} passes env to groups.mjs`) // the vault notes
 }
 
 // end to end: Chrome's side of host.mjs (the relay) -> unix socket -> server.mjs

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { parseFailedSyncs, platform, dateRange, liveFails } from './failed-syncs.ts'
+import { parseFailedSyncs, platform, dateRange, liveFails, statusRank, syncMarkdown } from './failed-syncs.ts'
 import { connectionUrl } from './links.ts'
 
 // Captured from a real `failed-syncs` run against prod (2026-10-01); recovered_* (added later) set to NULL by hand.
@@ -25,17 +25,19 @@ assert.deepEqual(rows[0], {
   recoveredStart: null,
   recoveredEnd: null,
   recoveredAt: null,
+  status: 'FAIL',
 })
 assert.equal(connectionUrl(rows[0]), 'https://app.refit.ai/799a63f3-235c-46ce-9141-12e28915539f/datasources/service/beae0810-e8a6-45ce-8790-cfa8974be78e')
 assert.equal(platform(rows[0]), 'META')
 assert.equal(dateRange(rows[0]), '2026-08-31 → 2026-09-30')
 
 // column order is looked up by name; FILE connections have no service; truncation is reported
-const cols = ['update_at', 'id', 'connection_id', 'project_id', 'project', 'name', 'kind', 'service', 'type', 'start_date', 'end_date', 'reason', 'display_reason', 'recovered_start', 'recovered_end', 'recovered_at', 'extra']
-const fileRow = ['2026-09-01T00:00:00Z', 'a', '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'P', 'sheet.csv', 'FILE', null, 'DAILY', '2026-09-01', '2026-09-01', null, 'Upload failed', '2026-08-25', '2026-09-02', '2026-09-03T01:00:00Z', 1]
+const cols = ['update_at', 'id', 'connection_id', 'project_id', 'project', 'name', 'kind', 'service', 'type', 'start_date', 'end_date', 'reason', 'display_reason', 'recovered_start', 'recovered_end', 'recovered_at', 'status', 'extra']
+const fileRow = ['2026-09-01T00:00:00Z', 'a', '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'P', 'sheet.csv', 'FILE', null, 'DAILY', '2026-09-01', '2026-09-01', null, 'Upload failed', '2026-08-25', '2026-09-02', '2026-09-03T01:00:00Z', 'CANCEL', 1]
 const file = parseFailedSyncs(JSON.stringify({ columns: cols, rows: [fileRow], truncated: false, pagination: { has_more: true } }))
 assert.equal(file.truncated, true)
 assert.equal(platform(file.rows[0]), 'FILE')
+assert.equal(file.rows[0].status, 'CANCEL')
 assert.equal(dateRange(file.rows[0]), '2026-09-01')
 assert.match(connectionUrl(file.rows[0])!, /\/datasources\/file\/1111/)
 assert.deepEqual([file.rows[0].recoveredStart, file.rows[0].recoveredEnd, file.rows[0].recoveredAt], ['2026-08-25', '2026-09-02', '2026-09-03T01:00:00Z'])
@@ -65,4 +67,10 @@ assert.throws(() => parseFailedSyncs('$ tabularis --mcp'), /not JSON/)
 assert.throws(() => parseFailedSyncs('{"columns":["id"],"rows":[["x"]]}'), /Missing column: connection_id/)
 assert.throws(() => parseFailedSyncs(JSON.stringify({ columns: cols, rows: [[...fileRow.slice(0, 1), null, ...fileRow.slice(2)]] })), /id is null/)
 assert.throws(() => parseFailedSyncs(JSON.stringify({ columns: cols, rows: ['x'] })), /not an array/)
+// connection status order
+assert.deepEqual(['SUCCESS', null, 'FRAGMENTED', 'FAIL', 'IN_PROGRESS', 'WEIRD'].sort((a, b) => statusRank(a) - statusRank(b)), ['FAIL', 'IN_PROGRESS', 'FRAGMENTED', 'SUCCESS', null, 'WEIRD'])
 console.log('failed-syncs ok')
+
+// Copy Markdown (Not SUCCESS nor FAIL tab): "- [name](url): MM-DD ~ MM-DD", brackets escaped, no dates part without dates
+assert.equal(syncMarkdown([{ ...rows[0], name: ' A [x] ' }, { ...file.rows[0], start: null, end: null }]).split('\n')[0], `- [A \\[x\\]](${connectionUrl(rows[0])}): 08-31 ~ 09-30`)
+assert.equal(syncMarkdown([{ ...file.rows[0], start: null, end: null }]), `- [sheet.csv](${connectionUrl(file.rows[0])})`)

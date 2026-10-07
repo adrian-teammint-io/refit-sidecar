@@ -11,7 +11,7 @@ WITH used AS (
   FROM connection c
   LEFT JOIN service_connection sc ON sc.id = c.service_connection_id
   WHERE c.id::text IN (SELECT id FROM used)
-    AND (strpos(lower(c.name), lower(:q)) > 0 OR strpos(lower(coalesce(sc.service, c.type)), lower(:q)) > 0)
+    AND (strpos(lower(c.name), lower(:q)) > 0 OR strpos(lower(coalesce(sc.service, c.type)), lower(:q)) > 0 OR strpos(lower(c.id::text), lower(:q)) > 0)
 ), last AS (
   SELECT DISTINCT ON (r.connection_id) r.connection_id, r.status, r.type, r.update_at, r.reason, r.display_reason
   FROM sync_request r WHERE r.connection_id IN (SELECT id FROM page)
@@ -29,7 +29,7 @@ LEFT JOIN service_connection sc ON sc.id = p.service_connection_id
 LEFT JOIN last l ON l.connection_id = p.id
 LEFT JOIN fails f ON f.connection_id = p.id
 ORDER BY
-  CASE WHEN :sort = 'status' THEN (l.status = 'FAIL') END DESC NULLS LAST,
+  CASE WHEN :sort = 'status' THEN CASE l.status WHEN 'FAIL' THEN 0 WHEN 'IN_PROGRESS' THEN 1 WHEN 'FRAGMENTED' THEN 2 WHEN 'SUCCESS' THEN 3 ELSE 4 END END, -- statusRank() in src/failed-syncs.ts
   CASE WHEN :sort = 'service' THEN coalesce(sc.service, p.type) END,
   p.name, p.id
 LIMIT 31 OFFSET :offset -- BATCH + 1 (src/projects.ts)

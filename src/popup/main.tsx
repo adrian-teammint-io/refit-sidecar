@@ -5,107 +5,48 @@ import '@fontsource-variable/jetbrains-mono/wght.css'
 import './popup.css'
 import { call } from '../api'
 import { vars } from '../themes'
-import { actionFor, keyLabel, keysOf } from '../keybinds'
-import { ago, plural, runStatus } from '../term'
-import { APP } from '../table'
-import { useStore, useDark, useNow, isRunning, saveSettings } from '../shared/store'
-import { Icon, IconBtn } from '../shared/icons'
-import { Segmented } from '../shared/controls'
-import { Terminal } from '../shared/Terminal'
-import { SyncList } from '../shared/SyncList'
+import { useStore, useDark, saveSettings } from '../shared/store'
+import { IconBtn } from '../shared/icons'
 import { HostSetup, hostProblem, hostLabel } from '../shared/HostSetup'
 import { PopupSettings } from './PopupSettings'
+import { AddToGroup } from './AddToGroup'
+import { PopupSearch } from './Search'
+import { useEnvData, useTab } from './tab'
 
-const SHOWN = 4 // rows that fit under 600px; the drawer lists the rest
-
-// Toolbar popup: last run summary, the newest failures, and the raw output. Renders straight from storage.
+// Toolbar popup: the groups (on a Refit connection page, a click adds it to one); search connections and open one in Refit. Both on
+// the current tab's environment. The toolbar icon still shows the FAIL count (background.ts), from the drawer's fetches.
 function Popup() {
-  const { settings, host, run, output, failedSyncs: fs, loaded } = useStore()
-  const [view, setView] = useState<'summary' | 'output' | 'settings'>('summary')
-  const [error, setError] = useState('')
-  const running = isRunning(run)
-  const now = useNow(true, running ? 250 : 30_000)
+  const { settings, host, run, loaded } = useStore()
+  const [view, setView] = useState<'main' | 'settings'>('main')
   const dark = useDark(settings)
   const theme = vars(settings, dark)
   useEffect(() => { document.documentElement.style.background = theme['--bg'] }, [theme['--bg']])
-  const n = fs?.rows.length ?? 0
-  const projects = new Set(fs?.rows.map(r => r.project)).size
-  const newest = Math.max(0, ...(fs?.rows ?? []).map(r => Date.parse(r.updatedAt) || 0))
-  const st = run?.command === 'failed-syncs' ? runStatus(run, now) : undefined // this card is about failed-syncs only
-
-  async function runIt() {
-    setError('')
-    try { await call({ type: 'run', command: 'failed-syncs' }) } catch (e) { setError((e as Error).message) }
-  }
-  // Refetch (keybinds.ts, default R) runs the FAIL fetch, like the drawer. On document: the popup opens with focus
-  // on <body>. Not in Settings, where the key may be being rebound.
-  const keys = keysOf(settings.keys)
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => {
-      if (view === 'settings' || running || actionFor(e, keys) !== 'refetch') return
-      e.preventDefault(); runIt()
-    }
-    document.addEventListener('keydown', on)
-    return () => document.removeEventListener('keydown', on)
-  }, [view, running, keys.refetch])
-  const cancel = () => call({ type: 'cancel' }).catch(e => setError((e as Error).message))
+  const tab = useTab()
+  const data = useEnvData(tab.env)
+  const ready = host?.state === 'ready'
+  // The group notes may have changed since the drawer last read them (the Groups card shows them).
+  useEffect(() => { if (tab.ready && ready) call({ type: 'run', command: 'groups-list', args: { env: tab.env } }).catch(() => {}) }, [tab.ready, tab.env, ready])
 
   return (
     <main className={`root ${dark ? 'dark' : 'light'} popup`} style={theme as React.CSSProperties}
-      onKeyDown={e => { if (e.key === 'Escape' && view === 'settings') { e.preventDefault(); setView('summary') } }}>
+      onKeyDown={e => { if (e.key === 'Escape' && view === 'settings') { e.preventDefault(); setView('main') } }}>
       <header className="p-head">
-        {view === 'settings' && <IconBtn icon="back" label="Back" onClick={() => setView('summary')} />}
-        <h1>{view === 'settings' ? 'Settings' : 'Refit failed syncs'}</h1>
+        {view === 'settings' && <IconBtn icon="back" label="Back" onClick={() => setView('main')} />}
+        <h1>{view === 'settings' ? 'Settings' : 'Refit Sidecar'}</h1>
         {view !== 'settings' && <>
-          <span className="muted p-updated">{running ? 'Running…' : fs?.at ? `Updated ${ago(fs.at, now)}` : ''}</span>
-          <IconBtn icon="refresh" label={running ? 'Running…' : `Fetch FAIL syncs (${keyLabel(keys.refetch)})`} onClick={runIt} disabled={running} spin={running} />
+          {tab.env === 'stag' && <span className="p-env">STAG</span>}
           <IconBtn icon="gear" label="Settings" onClick={() => setView('settings')} />
         </>}
       </header>
 
       {view === 'settings' ? <PopupSettings settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} /> : <>
-        <Segmented label="View" value={view} options={[['summary', 'Summary'], ['output', running ? 'Output ●' : 'Output']] as const} onChange={setView} />
-
-        {view === 'output' ? (
-          <div className="p-term"><Terminal output={output} run={run} now={now} onCancel={cancel} /></div>
-        ) : !loaded ? null : hostProblem(host) ? (
-          <HostSetup host={host} compact />
-        ) : <>
-          <article className="card p-count" aria-busy={running} data-tone={!fs ? undefined : n ? 'fail' : 'ok'}>
-            <div>
-              <p className="eyebrow">Failed sync requests · prod</p>
-              <strong className="p-num">{fs ? n : '–'}{fs && !n && <Icon d="check" size={22} />}</strong>
-              {!!n && <p className="p-where muted">in {plural(projects, 'project')} · newest {ago(newest, now)}</p>}
-            </div>
-            <div className="p-count-side">
-              {st && <span className="pill" data-tone={st.tone} title={st.label}>{st.label}</span>}
-              {running
-                ? <button className="btn ghost" onClick={cancel}><Icon d="stop" size={14} />Cancel</button>
-                : <button className="btn primary" onClick={runIt}><Icon d="play" size={14} />Fetch</button>}
-            </div>
-          </article>
-
-          {(error || fs?.error) && (
-            <div className="banner" role="alert">
-              <Icon d="alert" />
-              <span>{error || `${fs!.rows.length ? 'Showing the last good result. ' : ''}${fs!.error}`}</span>
-              <button className="btn ghost" onClick={() => setView('output')}>Output</button>
-            </div>
-          )}
-
-          {!fs ? <p className="p-note muted">Not fetched yet. <b>Fetch</b> runs failed-syncs in your <code>pnpm server</code> terminal.</p>
-            : !n ? <p className="p-note muted"><Icon d="check" size={14} /> No failed syncs.</p>
-            : <SyncList rows={fs.rows} now={now} limit={SHOWN} newTab />}
-          {n > SHOWN && (
-            <button className="btn ghost p-more" onClick={() => chrome.tabs.create({ url: APP })}>
-              {n - SHOWN} more in the drawer on app.refit.ai<Icon d="external" size={14} />
-            </button>
-          )}
+        {!loaded || !tab.ready ? null : hostProblem(host) ? <HostSetup host={host} compact /> : <>
+          <AddToGroup page={tab.page} env={tab.env} d={data} run={run} ready={ready} />
+          <PopupSearch env={tab.env} data={data} run={run} ready={ready} />
         </>}
-
         <footer className="p-foot muted">
           <span>{hostLabel(host)}</span>
-          <span>Tabularis · refit-prod</span>
+          <span>Tabularis · refit-{tab.env}</span>
         </footer>
       </>}
     </main>

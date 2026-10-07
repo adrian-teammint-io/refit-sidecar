@@ -69,8 +69,16 @@ const allProjects = fill(projectRows, (p, i) => ({ ...p, id: uuid(900 + i), name
 const sortedConns = BY_SERVICE ? [...connRows].sort((a, b) => (a.service ?? a.kind).localeCompare(b.service ?? b.kind) || a.name.localeCompare(b.name)) : connRows
 const projects = MODE === 'never' || MODE === 'loading' ? undefined : page('p1', { q: '', status: 'all', sort: 'active' }, allProjects)
 const projectConnections = MODE === 'never' ? undefined : { [uuid(900)]: page('c1', { q: '', sort: BY_SERVICE ? 'service' : 'status' }, sortedConns) }
-const connections = MODE === 'never' ? undefined : page('n1', { q: '' }, fill(connRows, (c, i) => ({ ...c, connectionId: uuid(i + 1) }))
+// pq=TEXT (popup): the popup's search types TEXT, and the stored connections page answers it
+const PQ = decodeURIComponent((Q.match(/pq=([^&]*)/) || [])[1] || '')
+const connections = MODE === 'never' ? undefined : page('n1', { q: PQ, platform: 'all' }, fill(connRows, (c, i) => ({ ...c, connectionId: uuid(i + 1) }))
   .map((c, i) => ({ ...c, projectId: projectRows[i % 4].id, project: projectRows[i % 4].name })))
+// Saved connection groups (src/groups.ts): one checked 2 min ago with a connection the check didn't find, one never checked
+const byIds = (...is) => Object.fromEntries(is.map(i => [connections?.rows[i].connectionId ?? uuid(i + 1), { ...(connections?.rows[i] ?? connRows[i]), ...(i === 6 ? { gone: true } : {}) }]))
+const groups = MODE === 'never' || /nogroups/.test(Q) ? undefined : {
+  'craver meta': { name: 'Craver Meta', file: 'Craver Meta.md', at: now - 120000, conns: byIds(0, 4, 6) },
+  'jp google': { name: 'JP Google', file: 'JP Google.md', conns: byIds(1, 2) },
+}
 const F = (i, name, p, nodes, outputs, notOk, mins, fitMins) => ({ id: uuid(700 + i), projectId: projectRows[p].id, project: projectRows[p].name, projectStatus: projectRows[p].status,
   name, nodes, outputs, notOk, updatedAt: new Date(now - mins * 60000).toISOString().slice(0, 19) + 'Z', lastFit: fitMins === null ? null : new Date(now - fitMins * 60000).toISOString().slice(0, 19) + 'Z' })
 const fitRows = [
@@ -97,12 +105,14 @@ const host = MODE === 'offline' ? { state: 'offline' }
   : MODE === 'missing' ? { state: 'missing', error: 'Specified native messaging host not found.' }
   : MODE === 'forbidden' ? { state: 'forbidden', error: 'Access to the specified native messaging host is forbidden.' }
   : { state: 'ready', commands: ['failed-syncs', 'projects', 'project-connections', 'connections', 'fitting-rooms', 'fitting-room-connections', 'fitting-room-flow'] }
-// Sync requests tabs: two IN_PROGRESS rows (no reason), FRAGMENTED fetched with nothing in it
+// Sync requests tabs: OTHER (not SUCCESS nor FAIL) as the SQL orders it, IN_PROGRESS, READY, then the rest (no reason;
+// updated 95, 5, 30 and 600 min ago); FRAGMENTED fetched with nothing in it
+const OTHER = [['IN_PROGRESS', 95], ['READY', 5], ['FRAGMENTED', 30], ['CANCEL', 600]]
 const syncRequests = MODE === 'never' ? undefined : {
-  IN_PROGRESS: { at: now - 60000, runId: 'r2', truncated: false, rows: rows.slice(0, 2).map(r => ({ ...r, id: r.id.replace('aaaa', 'bbbb'), reason: null, displayReason: null, recoveredAt: null })) },
+  OTHER: { at: now - 60000, runId: 'r2', truncated: false, rows: rows.slice(0, 4).map((r, i) => ({ ...r, id: r.id.replace('aaaa', 'bbbb'), status: OTHER[i][0], reason: null, displayReason: null, recoveredAt: null, updatedAt: new Date(now - OTHER[i][1] * 60000).toISOString().slice(0, 19) + 'Z' })) },
   FRAGMENTED: { at: now - 60000, runId: 'r3', truncated: false, rows: [] },
 }
-const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}), font: decodeURIComponent((Q.match(/font=([^&]*)/) || [])[1] || ''), monoFont: decodeURIComponent((Q.match(/mono=([^&]*)/) || [])[1] || '') }, run, failedSyncs, syncRequests, projects, projectConnections, connections, fittingRooms, fittingRoomConnections, fittingRoomFlows, pins }
+const local = { settings: { ...(LIGHT ? { theme: 'paper', mode: 'light', badge: true } : { theme: 'graphite', mode: 'dark', badge: true }), ...(/wide/.test(Q) ? { drawerWidth: 720 } : {}), font: decodeURIComponent((Q.match(/font=([^&]*)/) || [])[1] || ''), monoFont: decodeURIComponent((Q.match(/mono=([^&]*)/) || [])[1] || '') }, run, failedSyncs, syncRequests, projects, projectConnections, connections, groups, fittingRooms, fittingRoomConnections, fittingRoomFlows, pins }
 const session = { host, output: run && { runId: 'r1', lines: running ? lines.slice(0, 7) : lines, dropped: 0 } }
 // `answer` in the hash: a project-members run "finishes" 50ms later with STUB_MEMBERS (u1 is the owner), through
 // storage.onChanged like the worker's writes. Everything else stays unanswered.
@@ -138,7 +148,8 @@ window.chrome = {
     // Records each request on <html data-sent> so --dump-dom can check what a view asked for.
     sendMessage: async req => { const h = document.documentElement; h.dataset.sent = (h.dataset.sent ? h.dataset.sent + '|' : '') + (req.type === 'run' ? `run:${req.command}` : req.type); answer(req); return { ok: true, data: req.type === 'fonts' ? ['Helvetica Neue', 'Inter', 'Menlo', 'SF Mono'] : undefined } } },
   storage: { local: area(local), session: area(session), onChanged: { addListener: f => listeners.push(f), removeListener() {} } },
-  tabs: { create() {} },
+  // conntab flag: the popup's current tab is a connection page (conntab=new: one the drawer never loaded)
+  tabs: { create() {}, query: async () => [{ url: /conntab=new/.test(Q) ? `https://app.refit.ai/${projectRows[0].id}/datasources/service/${uuid(555)}` : /conntab/.test(Q) ? `https://app.refit.ai/${connections?.rows[1].projectId}/datasources/service/${connections?.rows[1].connectionId}` : 'https://example.com/' }] },
 }
 // The drawer uses a closed shadow root; open it here so the mock can click into it.
 const attach = Element.prototype.attachShadow
@@ -152,6 +163,7 @@ window.__MODE = MODE
 window.__NAV = (Q.match(/nav=(\w+)/) || [])[1] || 'home'
 window.__Q = decodeURIComponent((Q.match(/q=([^&]*)/) || [])[1] || '')
 if (location.pathname.endsWith('popup.html')) setTimeout(() => {
-  if (MODE === 'output') document.querySelectorAll('.segmented button')[1].click()
   if (MODE === 'settings') document.querySelector('[aria-label="Settings"]').click()
+  const box = document.querySelector('input[aria-label="Search connections"]')
+  if (PQ && box) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, PQ); box.dispatchEvent(new Event('input', { bubbles: true })) }
 }, 600)

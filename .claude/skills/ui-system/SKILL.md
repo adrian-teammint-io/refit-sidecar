@@ -26,7 +26,7 @@ Direction: **dark premium, keyboard-first**, in the spirit of Raycast and Linear
 | `--sans` `--mono` | Geist Variable / JetBrains Mono Variable |
 
 Fixed hues are allowed only for status:
-- Run state via `.pill[data-tone]` (ui.css): green ok, red fail, accent while running. Failure reasons get a faint red tint.
+- Run state via `.pill[data-tone]` (ui.css): green ok, red fail, accent while running, amber `warn` (a queued READY sync). Failure reasons get a faint red tint.
 - Error: `#f87171` dark / `#b91c1c` light.
 - Danger button: `#dc2626`.
 
@@ -34,10 +34,14 @@ In light mode the accent can be too dark to read as text on a tint. Use `.light 
 
 ### Adding a theme
 
-Add one entry to `THEMES` with both palettes. Then check the following, and render the drawer Settings and popup with `ui-verify` in both modes:
-- `text` on `bg` ≥ 4.5:1
+Add one entry to `THEMES` with both palettes, run `pnpm test`, and render the drawer Settings and popup with `ui-verify` in both modes. `themes.test.ts` checks every palette:
+- `text` and `muted` ≥ 4.5:1 on `bg`, `surface` and `raised` (raised holds code, chips and the active tab), and `muted` differs from `text`
 - `onAccent` on `accent` ≥ 4.5:1
-- the light-mode `accent` is dark enough to read as text
+- `accent` on `bg` ≥ 4.5:1 dark (used as text: badges, links) and ≥ 3:1 light (light mode swaps accent text for `--text`)
+
+When a palette fails, nudge `muted` toward `text` (or `text` toward black / white) a few percent at a time rather than inventing a new colour, so the theme keeps its character.
+
+Swatches (`ThemePicker`) preview each theme as a tiny card: bg, a surface block with a text and a muted line, and the accent. 19 themes today: Graphite (default), Claude Paper, Nord, Tokyo Night, Rosé Pine, Gruvbox, Solarized, Catppuccin, Dracula, Everforest, Mono, Kanagawa, One Dark, GitHub, Ayu, Night Owl, Vesper, Flexoki, Monokai.
 
 ## 2. Primitives (`src/ui.css`)
 
@@ -58,7 +62,7 @@ Shared components (used by two or more surfaces, styled in `ui.css`):
 - `<Terminal output run now onCancel />` (`shared/Terminal.tsx`): `.term-wrap` > `.term` log + `.term-bar` with status pill, Follow switch, Cancel
 - `<SyncList rows now limit? newTab? />` (`shared/SyncList.tsx`): `.sync` cards; the popup compacts them in `popup.css`
 - `<HostSetup host compact? />` / `<HostCard host />` (`shared/HostSetup.tsx`): host-missing empty state with the copyable install command, and the status row
-- `.pill[data-tone=ok|fail|run]`, `.banner` (amber, keeps last data), `.badge` (platform), `.btn.sm`
+- `.pill[data-tone=ok|fail|run|warn]`, `.banner` (amber, keeps last data), `.badge` (platform), `.btn.sm`
 
 Icons are inline Lucide-style SVG paths (`ICONS` in `shared/icons.tsx`): 24 viewBox, stroke 1.8, `currentColor`. No icon libraries, no emoji.
 
@@ -115,3 +119,11 @@ Rules:
 - `:focus-visible` shows a 2px accent outline; never remove it.
 - Hit targets are ≥ 32px. Use a negative-inset `::before` to enlarge small ones (see `.launcher`).
 - Esc goes back or closes. ↑/↓/Enter navigate lists.
+
+## Polish rules (from the fe-design pass)
+
+- Hover styles live inside `@media (hover: hover) and (pointer: fine)` and skip disabled controls (`:not(:disabled)`).
+- Primary and danger buttons darken on hover (`color-mix` toward `--text`, `#b91c1c`); a danger button's focus ring is red.
+- Cards: a 1px inset top highlight plus one soft tinted drop shadow (`--shadow-tint`), same light source everywhere; never pure black.
+- Anything that shows counts (`.segmented`, run bar, count chips) uses tabular figures.
+- Single-line floating text (the toast) caps its width and ellipsizes instead of overflowing the drawer.

@@ -31,7 +31,7 @@ setTimeout(() => {
       if (__NAV !== 'home' && __Q) type(s.querySelector('.search input'), __Q)
       if (__NAV === 'project') [...s.querySelectorAll('.proj-list')].at(-1).querySelector('.proj').click() // the first unpinned row has cached connections
       if (/expand/.test(location.hash)) s.querySelectorAll('.sync-reason')[1].click()
-      const tab = (location.hash.match(/tab=(\w+)/) || [])[1] // Sync requests status tab, e.g. 'results-nav=failed&tab=IN_PROGRESS'
+      const tab = (location.hash.match(/tab=(\w+)/) || [])[1] // Sync requests status tab, e.g. 'results-nav=failed&tab=Not' (text prefix)
       if (tab) [...s.querySelectorAll('[role=radio]')].find(b => b.textContent.startsWith(tab))?.click()
       if (/bottom/.test(location.hash)) setTimeout(() => { s.querySelector('.body').scrollTop = 1e6 }, 100)
       // click=A,B,...: click the first button (or focusable card) whose text starts with (or aria-label is) each label, in order, 150ms apart

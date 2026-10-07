@@ -2,11 +2,11 @@
 
 > **Asked to change something?** 1) Match the request to a skill in [Skill routing](#skill-routing) and load it. 2) Find the feature in [Where to edit](#where-to-edit): it names the files, symbols and CSS section, so you can open the right file without searching.
 
-Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the four writes, `delete-syncs`, `add-project-user`, `create-project` and `update-schedules`. The full command catalog is in the `add-command` skill.
+Chrome MV3 extension for app.refit.ai and staging-app.refit.ai that runs allowlisted commands in a terminal you keep open (`pnpm server`) and shows their output on the page. Every command takes `env` (`prod` | `stag`, default `prod`), which `tabularis-query.mjs` maps to a Tabularis connection (`CONNECTIONS` in protocol.mjs: REFIT_ PROD / REFIT_STAG). All commands are SELECTs except the six DB writes, `delete-syncs`, `delete-other-syncs`, `mark-syncs-fail`, `add-project-user`, `create-project` and `update-schedules` (`groups-edit` writes a vault note, not the DB). The full command catalog is in the `add-command` skill.
 
 All writes are blocked by Tabularis read-only mode until Hoàn approves them in the Tabularis app, so they wait up to 5 min. None queues: the worker refuses a write while another command runs (`WRITES` in `src/host.ts`). Queries never select `refit_user.pwd` or tokens.
 
-Surfaces: the **drawer** (a stack of views injected into app.refit.ai / staging-app.refit.ai, closed shadow DOM), the **toolbar icon + popup** (FAIL count and last run) and the **settings page** (native host setup). How each behaves is in the `drawer-views` skill.
+Surfaces: the **drawer** (a stack of views injected into app.refit.ai / staging-app.refit.ai, closed shadow DOM), the **toolbar icon + popup** (FAIL count on the icon; the popup lists connection groups, adds the current tab's connection to one, and searches connections) and the **settings page** (native host setup). How each behaves is in the `drawer-views` skill.
 
 ## Skill routing
 
@@ -14,10 +14,10 @@ Load the skill whose keywords match the request (several can apply). Skills live
 
 | Skill | Load when the request mentions… |
 |---|---|
-| `add-command` | new command, query, SQL, `host/sql`, `commands.json`, params, `PARAMS`, `bindParams`, `WRITES`, `checkQuery`, Tabularis, parser, `parseTable`, sample, `readResult` / `writeResult`, delete / add user / create project / update schedules write, command list, what a command returns |
-| `drawer-views` | drawer, view, screen, Home, Projects, Project, Members, Add user, New project, Duplicate, Sync schedule, cron, schedule time, range, Connections, Fitting room, Flow, Steps, Graph, Sync requests, FAIL / IN_PROGRESS / FRAGMENTED, select mode, bulk bar, pins, breadcrumbs, resize, toast, popup, toolbar icon, staging chip, keyboard shortcut, keybind, refetch key, adding a view |
+| `add-command` | new command, query, SQL, `host/sql`, `commands.json`, params, `PARAMS`, `bindParams`, `WRITES`, `checkQuery`, Tabularis, parser, `parseTable`, sample, `readResult` / `writeResult`, delete / mark FAIL / add user / create project / update schedules write, command list, what a command returns |
+| `drawer-views` | drawer, view, screen, Home, Projects, Project, Members, Add user, New project, Duplicate, Sync schedule, cron, schedule time, range, Connections, Fitting room, Flow, Steps, Graph, Sync requests, FAIL / Not SUCCESS nor FAIL / FRAGMENTED, status filter, Copy Markdown, Mark all as FAIL, select mode, double-click to select, bulk bar, connection groups, pins, breadcrumbs, resize, toast, popup, toolbar icon, staging chip, keyboard shortcut, keybind, refetch key, adding a view |
 | `architecture` | native host, relay, unix socket, `pnpm server`, protocol, framing, chunk, offline / missing / forbidden / down, reconnect, queue, superseded, latest wins, cancel, storage keys, `DATA_KEYS`, `envKey`, prod vs stag results, output buffer, lifecycle, worker restart |
-| `ui-system` | style, CSS, theme, colour, dark / light, font, typography, motion, animation, spacing, layout, new component, restyle, UI review |
+| `ui-system` | style, CSS, theme, new theme, contrast, colour, dark / light, font, typography, motion, animation, spacing, layout, new component, restyle, UI review |
 | `ui-verify` | screenshot, visual check, verify UI, render bug, stub, mock, fixture, popup height |
 
 ## Commands (pnpm)
@@ -58,7 +58,7 @@ The worker owns the only native port; surfaces send `call(req)` and render from 
   - `timeoutMs`
 - `spawn(..., {shell: false})` always. Never build a shell string, never pass page text into a command.
 - Nothing from app.refit.ai's page becomes a command or argument; the drawer reads nothing from the page. The only page-derived input is `location.hostname` (the origin, which a page can't fake) choosing `env`, and the host's `env` pattern only allows `prod|stag`. Data from the DB is rendered as text, and `connectionUrl()` only builds links from UUID-shaped ids. Delete ids come from rows the DB returned and must be UUIDs (`PARAMS.ids`).
-- `tabularis-query.mjs` runs `checkQuery()` (protocol.mjs): a single `SELECT`/`WITH`, or a write listed in `WRITES`, which maps a SQL file to the exact statement shape it must have (`sql/delete-syncs.sql`: `DELETE FROM sync_request WHERE status = 'FAIL' AND id IN ('<uuid>', …) RETURNING id`; `sql/add-project-user.sql`: `INSERT INTO refit_user_project_relation (user_id, project_id, role) VALUES ('<uuid>', '<uuid>', '<role>') ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id, role`; `sql/update-schedules.sql`: `UPDATE sync_schedule SET cron = '0 <4-23> * * *', range = '<range>', skip = false, update_at = now() WHERE connection_id IN (SELECT id FROM connection WHERE project_id IN ('<uuid>', …)) RETURNING connection_id`; `sql/create-project.sql`: the `CREATE_PROJECT` template, turned into a regex by `shape()` with each placeholder replaced by the only forms its binder emits (`SHAPES`)). The template lives in protocol.mjs, apart from the .sql file, so editing the file can't widen what's allowed; host.test.mjs checks the bound file still matches. A read must also contain no write keyword (`insert`, `update`, `delete`, `create`, …), because `WITH x AS (INSERT …) SELECT …` starts with `WITH`. Tabularis connects as `postgres` (superuser), so these fixed files plus Tabularis's own read-only mode and approval prompt are the guard.
+- `tabularis-query.mjs` runs `checkQuery()` (protocol.mjs): a single `SELECT`/`WITH`, or a write listed in `WRITES`, which maps a SQL file to the exact statement shape it must have (`sql/delete-syncs.sql`: `DELETE FROM sync_request WHERE status = 'FAIL' AND id IN ('<uuid>', …) RETURNING id`; `sql/delete-other-syncs.sql`: the same with `status NOT IN ('SUCCESS', 'FAIL')`; `sql/mark-syncs-fail.sql`: `UPDATE sync_request SET status = 'FAIL', reason = 'Manually mark as FAIL', update_at = now() WHERE status NOT IN ('SUCCESS', 'FAIL') AND id IN ('<uuid>', …) RETURNING id`; `sql/add-project-user.sql`: `INSERT INTO refit_user_project_relation (user_id, project_id, role) VALUES ('<uuid>', '<uuid>', '<role>') ON CONFLICT (project_id, user_id) DO NOTHING RETURNING user_id, role`; `sql/update-schedules.sql`: `UPDATE sync_schedule SET cron = '0 <4-23> * * *', range = '<range>', skip = false, update_at = now() WHERE connection_id IN (SELECT id FROM connection WHERE project_id IN ('<uuid>', …)) RETURNING connection_id`; `sql/create-project.sql`: the `CREATE_PROJECT` template, turned into a regex by `shape()` with each placeholder replaced by the only forms its binder emits (`SHAPES`)). The template lives in protocol.mjs, apart from the .sql file, so editing the file can't widen what's allowed; host.test.mjs checks the bound file still matches. A read must also contain no write keyword (`insert`, `update`, `delete`, `create`, …), because `WITH x AS (INSERT …) SELECT …` starts with `WITH`. Tabularis connects as `postgres` (superuser), so these fixed files plus Tabularis's own read-only mode and approval prompt are the guard.
 - **Ask Hoàn before adding any command that writes, deletes or touches the network** (DB reads included), and before adding anything to `WRITES`.
 - **Never run `tabularis-query.mjs` or any write command to test, not even with a fake binary.** Test guards as pure functions in `host/host.test.mjs`.
 
@@ -75,7 +75,8 @@ host/                     runs on your Mac (node), never in the browser
   tabularis-query.mjs     one SQL file through `tabularis --mcp`: env -> connection, bindParams, checkQuery, 60s read / 5 min write
   commands.json           THE allowlist: command -> {exec, args with "{param}", params {pattern, default}, timeoutMs}
   sql/                    one file per command (reads: failed-syncs, projects, project-connections, connections, fitting-rooms, fitting-room-connections, fitting-room-flow,
-                          project-members, user-search, project-schedules; writes: delete-syncs, add-project-user, create-project, update-schedules)
+                          project-members, user-search, project-schedules, connection-group; writes: delete-syncs, delete-other-syncs, mark-syncs-fail,
+                          add-project-user, create-project, update-schedules)
   host.test.mjs           pure checks (framing, argv, bindParams, checkQuery, commands.json shape) + relay/server end to end
   install.mjs             install-host / uninstall-host
 public/manifest.json      MV3 manifest: content script on app.refit.ai + staging-app.refit.ai
@@ -89,7 +90,8 @@ src/
   projects.ts             types + parsers for browse and members (Project, ProjectConnection, ConnectionHit, FittingRoom, Member,
                           UserHit, Page...), BATCH, toHex/fromHex/cleanQuery/toArgs/queryOf, mergePage, dropStalePages,
                           cacheProject, pins (togglePin/refreshPins/pinnedFor), ROLES / PLANS / PROJECT_STATUSES, NO_PROJECT
-  failed-syncs.ts         FailedSync (+ recovered*), parseFailedSyncs, SYNC_STATUSES / SyncStatus / SyncRequests, liveFails, platform, dateRange
+  failed-syncs.ts         FailedSync (+ recovered*, status), parseFailedSyncs, SYNC_STATUSES (FAIL | OTHER | FRAGMENTED) / SyncStatus /
+                          SyncRequests, liveFails, platform, dateRange, syncMarkdown (Copy Markdown of sync rows)
   links.ts                every link into Refit: connectionUrl / projectUrl / fittingRoomUrl / fittingNodeUrl (UUID-checked, per APP)
   schedule.ts             sync schedules: ScheduleRow / Schedules, parseSchedules, cronText (cron -> plain English), RANGES / rangeLabel,
                           HOURS (04-23), dailyHour, scheduleDefaults (most common current value), byProject
@@ -102,8 +104,10 @@ src/
   shared/
     store.ts              Data (stored result shapes, also typed by the worker), Store, useStore() (this tab's env keys + live updates),
                           saveSettings, useDark, useNow, isRunning
-    SyncList.tsx          sync cards (drawer + popup): Succeeded after chip, status-aware foot/reason, select mode, Open in Refit
-    card.tsx              CardHead (check, badge, title, chips, open link), pickOnClick, stagger, UserLabel (avatar + email + name),
+    SyncList.tsx          sync cards: Succeeded after chip, status pill (OTHER tab), status-aware foot/reason, select mode,
+                          onPick (double-click) / onDelete (the card's x), Open in Refit
+    GroupPicker.tsx       GroupAdd (Add to group chips + name field), editGroups, addOp
+    card.tsx              CardHead (check, badge, title, chips, open link), pickOnClick, pickOnDoubleClick (enter select mode), stagger, UserLabel (avatar + email + name),
                           ProjectLink (card's project name), OpenInRefit (header button)
     icons.tsx             ICONS (Lucide paths; add new icons here), Icon, IconBtn
     controls.tsx          Segmented, Switch, ThemePicker, FontPicker, KeybindList
@@ -120,7 +124,8 @@ src/
     connections.tsx       ConnectionList (cards + select + Open in Refit), SelectToggle, ConnectionsView
     fitting.tsx           FittingRoomsView (clickable cards), FittingRoomView (header, Flow | Connections switch)
     flow.tsx              FlowPanel (status, search, Steps | Graph), FlowSkeleton, Steps, Graph + usePan (drag to pan), OpenNode
-    failed.tsx            FailedView (status tabs, fetch, Select mode, bulk bar) + Confirm (delete confirm)
+    failed.tsx            FailedView (tabs, status filter, fetch, Select mode, bulk bar: Delete, Copy Markdown, Mark all as FAIL),
+                          DELETE (per-tab delete command + confirm text), Confirm (delete / mark confirm)
     members.tsx           MembersPanel (member list), AddUser, UserPicker (shared user search)
     new-project.tsx       NewProjectView (create-project form + confirm)
     schedule.tsx          ScheduleView (current schedules per project, time + range form, update-schedules confirm)
@@ -132,9 +137,11 @@ src/
     resize.ts             useResize (left-edge drag, arrows, double-click reset; MIN/MAX/DEFAULT_WIDTH)
     Settings.tsx          SettingsView (drawer settings page)
     styles.css            drawer styles, one `/* … */` section per feature (see Where to edit)
-  popup/                  toolbar popup: main.tsx (Popup), PopupSettings.tsx, popup.css
+  popup/                  toolbar popup: main.tsx (Popup), AddToGroup.tsx (groups list, add this tab's connection), Search.tsx,
+                          tab.ts (useTab: env + connection page; useEnvData), PopupSettings.tsx, popup.css
   options.tsx             extension settings page (host setup)
-  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects, flow, keybinds, themes) against src/samples/
+  *.test.ts               pure tests run by `pnpm test` (term, failed-syncs, projects, flow, keybinds, themes incl. palette contrast, groups,
+                          schedule) against src/samples/
 .claude/skills/           add-command, drawer-views, architecture, ui-system, ui-verify (see Skill routing)
 ```
 
@@ -158,7 +165,7 @@ src/
 | A fitting room's flow (Steps / Graph) | `content/flow.tsx`, `src/flow.ts`, `host/sql/fitting-room-flow.sql`, `content/styles.css` (Fitting room Flow tab) | `FlowPanel`, `FlowSkeleton`, `Steps`, `Graph`, `usePan`, `OpenNode`; `steps` / `layers` / `layout`, `matchesNode`, `parseFlow`; `fitting-room-flow` branch in `readResult` |
 | Members list, Add user | `content/members.tsx`, `host/sql/project-members.sql`, `user-search.sql`, `add-project-user.sql` | `MembersPanel`, `AddUser`, `UserPicker`; CSS "Project members + Add user" |
 | New project form, Duplicate | `content/new-project.tsx`, `content/projects.tsx` (`ProjectRow` button), `host/sql/create-project.sql`, `host/protocol.mjs` | `NewProjectView`, `DEFAULT_MEMBER`; `CREATE_PROJECT`, `SHAPES`; CSS "New project form" |
-| Sync requests (status tabs), select, delete confirm, name links | `content/failed.tsx`, `shared/SyncList.tsx`, `content/App.tsx`, `host/sql/failed-syncs.sql`, `delete-syncs.sql` | `FailedView`, `SYNC_STATUSES`, `Confirm`, `MAX_DELETE`, `SyncList` (`findConnection` / `findProject`), `find`, `CardHead` `onTitle`, `.text-link` (ui.css); CSS "Failed syncs…", "Bulk bar" |
+| Sync requests (tabs, status filter), select, double-click, x delete, Copy Markdown, Mark all as FAIL, confirms, name links | `content/failed.tsx`, `shared/SyncList.tsx`, `failed-syncs.ts`, `host.ts`, `content/App.tsx`, `host/sql/failed-syncs.sql`, `delete-syncs.sql`, `delete-other-syncs.sql`, `mark-syncs-fail.sql` | `FailedView`, `SYNC_STATUSES`, `DELETE`, `LABEL`, `only` (filter), `syncMarkdown`, `Confirm`, `MAX_DELETE`, `delete-other-syncs` / `mark-syncs-fail` branch in `writeResult`, `SyncList` (`findConnection` / `findProject`), `find`, `CardHead` `onTitle`, `.text-link` (ui.css); CSS "Failed syncs…", "Bulk bar" |
 | Search box, status line, error banner, empty / loading, load more | `content/browse.tsx` | `SearchBox`, `StatusLine` (`tools` slot, `data-refetch`), `ErrorBanner`, `Empty`, `Skeleton`, `LoadMore`, `useBrowse` (`MAX_AGE` revalidate); CSS "Search", "Run bar", "Browse results", "Loading skeleton" |
 | Batch size, paging, query <-> args | `projects.ts` (+ every browse SQL's `LIMIT 31`) | `BATCH`, `toArgs`, `queryOf`, `mergePage` |
 | Prod vs staging behaviour | `table.ts`, `host/protocol.mjs` | `ENV`, `APP`, `envKey`, `DATA_KEYS`; `CONNECTIONS` |
@@ -168,11 +175,11 @@ src/
 | Which SQL is allowed, param validation | `host/protocol.mjs`, `host/commands.json` | `PARAMS`, `bindParams`, `WRITES`, `checkQuery`; the command's `params` patterns |
 | Running SQL through Tabularis (timeouts, errors) | `host/tabularis-query.mjs` | `fail`, `TIMEOUT_MS`, `onReply` |
 | Keyboard shortcuts (add, rebind UI, handling) | `keybinds.ts`, `shared/controls.tsx`, `content/App.tsx`, `popup/main.tsx` | `KEYBINDS`, `actionFor`, `rebind`, `KeybindList`, `data-refetch`; CSS `.keybinds`, `.key-capture` (ui.css) |
-| Theme, colours, mode, fonts, drawer settings page | `themes.ts`, `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES`, `Settings`, `DEFAULTS`, `ThemePicker`, `FontPicker` (installed fonts from the worker's `fonts` Req, `chrome.fontSettings`; `FONTS` fallback suggestions), `fontFamily`, `SettingsView` |
+| Theme, colours, mode, fonts, drawer settings page | `themes.ts`, `themes.test.ts` (contrast check), `ui.css`, `shared/controls.tsx`, `content/Settings.tsx` | `THEMES` (19), `Settings`, `DEFAULTS`, `ThemePicker`, `FontPicker` (installed fonts from the worker's `fonts` Req, `chrome.fontSettings`; `FONTS` fallback suggestions), `fontFamily`, `SettingsView` |
 | Icons | `shared/icons.tsx` | `ICONS` (add a path), `Icon`, `IconBtn` |
-| Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/popup.css`, `background.ts` | `Popup`, `SHOWN`; icon: `paint`, `countIcon` |
+| Toolbar popup, toolbar icon count | `popup/main.tsx`, `popup/AddToGroup.tsx`, `popup/Search.tsx`, `popup/tab.ts`, `popup/popup.css`, `background.ts` | `Popup`, `AddToGroup`, `PopupSearch`, `useTab`; icon: `paint`, `countIcon` |
 | Host setup / offline screens | `shared/HostSetup.tsx`, `options.tsx` | `HostSetup`, `HostCard`, `hostProblem` |
-| Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html (`&tab=IN_PROGRESS` picks a Sync requests tab, `&reloading` = the Connections search refetching over its page, `click=` also hits focusable cards by aria-label, `&find=` types into the newest search box after the clicks, `&noflow` drops the cached flow for its skeleton), `MODES` in shoot.sh; the stub records requests on `<html data-sent>` for `--dump-dom` checks |
+| Screenshots of a new state | `.claude/skills/ui-verify/stub.js`, `mock.html`, `shoot.sh` | fixtures in stub.js, nav in mock.html (`&tab=Not` picks a Sync requests tab by label prefix, `&reloading` = the Connections search refetching over its page, `click=` also hits focusable cards by aria-label, `&find=` types into the newest search box after the clicks, `&noflow` drops the cached flow for its skeleton), `MODES` in shoot.sh; the stub records requests on `<html data-sent>` for `--dump-dom` checks |
 | Card header, user rows, project link, Open in Refit, select mode, write confirms | `shared/card.tsx`, `content/ui.tsx` | `CardHead`, `UserLabel`, `ProjectLink`, `OpenInRefit`, `useSelection`, `SelectionRow`, `WriteConfirm`, `EnvTag`; CSS "Bulk bar", "Project members + Add user" |
 
 ## UI system

@@ -78,7 +78,7 @@ function OutputPill({ n, now }: { n: FlowNode; now: number }) {
 
 function OpenNode({ room, n }: { room: Room; n: FlowNode }) {
   const url = fittingNodeUrl(room, n.id)
-  return url ? <a className="icon-btn sync-link" href={url} target="_top" aria-label={`Open ${n.name} in Refit`} title="Open node in Refit"><Icon d="external" size={14} /></a> : null
+  return url ? <a className="icon-btn sync-link" href={url} target="_blank" rel="noreferrer" aria-label={`Open ${n.name} in Refit`} title="Open node in Refit"><Icon d="external" size={14} /></a> : null
 }
 
 // Step 1 = nodes reading only connections; each later step reads the ones before. Steps come from the whole room, so

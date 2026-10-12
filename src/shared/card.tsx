@@ -19,7 +19,7 @@ export function CardHead({ badge, title, onTitle, check, link, children }: {
   badge: ReactNode; title: string; children?: ReactNode
   onTitle?: { label: string; onClick: () => void }
   check?: { on: boolean; label: string; onToggle: () => void }
-  link?: { href: string; label: string; title: string; newTab?: boolean }
+  link?: { href: string; label: string; title: string }
 }) {
   return (
     <div className="sync-head">
@@ -30,7 +30,7 @@ export function CardHead({ badge, title, onTitle, check, link, children }: {
       <strong title={title}>{onTitle ? <button className="text-link" aria-label={onTitle.label} onClick={onTitle.onClick}>{title}</button> : title}</strong>
       {children}
       {link && (
-        <a className="icon-btn sync-link" href={link.href} {...(link.newTab ? { target: '_blank', rel: 'noreferrer' } : { target: '_top' })}
+        <a className="icon-btn sync-link" href={link.href} target="_blank" rel="noreferrer"
           aria-label={link.label} title={link.title}><Icon d="external" size={14} /></a>
       )}
     </div>
@@ -44,7 +44,7 @@ export const ProjectLink = ({ name, onClick, children }: { name: string; onClick
 
 // The primary "Open in Refit" button in a view's header (project, fitting room). Nothing when the id isn't a UUID.
 export const OpenInRefit = ({ url }: { url?: string }) =>
-  url ? <a className="btn primary sm" href={url} target="_top"><Icon d="external" size={13} />Open in Refit</a> : null
+  url ? <a className="btn primary sm" href={url} target="_blank" rel="noreferrer"><Icon d="external" size={13} />Open in Refit</a> : null
 
 // Avatar, email and name (or `sub`): the inside of every user row (members, user search hits, picked user).
 export function UserLabel({ u, sub }: { u: { email: string; name: string | null }; sub?: ReactNode }) {

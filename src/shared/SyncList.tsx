@@ -34,7 +34,7 @@ export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting,
             <CardHead badge={platform(r)} title={r.name}
               onTitle={findConnection && { label: `Find connection ${r.name}`, onClick: () => findConnection(r) }}
               check={canPick ? { on, label: `Select ${r.name} (${r.id.slice(0, 8)})`, onToggle: () => onToggle!(r.id) } : undefined}
-              link={url && newTab ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open in Refit', newTab } : undefined}>
+              link={url && newTab ? { href: url, label: `Open ${r.name} in Refit`, title: 'Open in Refit' } : undefined}>
               {status === 'OTHER' && r.status && <span className="pill" data-tone={r.status === 'IN_PROGRESS' ? 'run' : r.status === 'READY' ? 'warn' : 'none'}>{r.status}</span>}
               {r.recoveredAt && (
                 <span className="ok-chip" title={`A later SUCCESS covers this end date: ${dateRange({ start: r.recoveredStart ?? null, end: r.recoveredEnd ?? null })}, ran ${ago(Date.parse(r.recoveredAt), now)}`}>
@@ -59,7 +59,7 @@ export function SyncList({ rows, now, limit, newTab, status = 'FAIL', selecting,
             <div className="sync-foot muted mono">
               <span>{r.id.slice(0, 8)} · {status === 'FAIL' ? 'failed' : 'updated'} {ago(Date.parse(r.updatedAt), now)}</span>
               {url && !newTab && (
-                <a className="open-link" href={url} target="_top" aria-label={`Open ${r.name} in Refit`}>
+                <a className="open-link" href={url} target="_blank" rel="noreferrer" aria-label={`Open ${r.name} in Refit`}>
                   Open in Refit<Icon d="external" size={12} />
                 </a>
               )}

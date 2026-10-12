@@ -30,6 +30,7 @@ body { margin: 0; width: 420px; }
 .p-group-list .proj > svg:last-child { flex-shrink: 0; }
 .p-group-list .proj:disabled > svg:last-child { color: var(--muted); }
 .p-group .err { margin: 0; }
+.p-fails { max-height: 200px; }
 .popup {
   overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 12px; max-height: 600px;
   background:

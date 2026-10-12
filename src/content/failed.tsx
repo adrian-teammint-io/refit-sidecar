@@ -5,11 +5,13 @@
 // (mark-syncs-fail, reason "Manually mark as FAIL").
 // Delete is occasional, so it hides behind a Select mode: cards get a check, a sticky bulk bar holds the count and
 // Delete, and that bar expands in place into the confirm (preview, environment; Tabularis approval is the last gate).
+// Every tab (FRAGMENTED too, which has no Delete) can select to Open the picked rows' connections in Refit.
 import { useEffect, useRef, useState } from 'react'
-import type { Command } from '../api'
+import { call, MAX_TABS, type Command } from '../api'
 import { ago, plural, runOk, runStatus } from '../term'
 import { dateRange, syncMarkdown, SYNC_STATUSES, type FailedSyncs, type SyncRequests, type SyncStatus } from '../failed-syncs'
 import { ENV } from '../table'
+import { connectionUrl } from '../links'
 import { Icon } from '../shared/icons'
 import { Segmented } from '../shared/controls'
 import { SyncList } from '../shared/SyncList'
@@ -50,13 +52,20 @@ export function FailedView({ fs: failed, other, conn: focus, find, run, now, rea
   const delOf = DELETE[status]
   const canDelete = !!delOf
   const delCmd = delOf?.cmd ?? 'delete-syncs'
-  const pickable = canDelete ? rows : []
+  const pickable = rows
   const [selecting, setSelecting] = useState(false)
   const sel = useSelection(pickable, r => r.id, MAX_DELETE)
   const { selected } = sel
   const [confirming, setConfirming] = useState<false | 'delete' | 'fail'>(false)
   const [copied, setCopied] = useState(false)
   const [copyErr, setCopyErr] = useState('')
+  // Open: each picked row's connection page once (several requests can share one), MAX_TABS per click, like a group's.
+  const urls = [...new Set(selected.map(r => connectionUrl(r)).filter((u): u is string => !!u))]
+  const [batch, setBatch] = useState(0)
+  const from = Math.min(batch * MAX_TABS, Math.max(urls.length - 1, 0))
+  const chunk = urls.slice(from, from + MAX_TABS)
+  const openAll = () => call({ type: 'openTabs', urls: chunk }).then(
+    () => { setCopyErr(''); setBatch(from + MAX_TABS >= urls.length ? 0 : batch + 1) }, e => setCopyErr((e as Error).message))
 
   const fetching = commandState(run, 'failed-syncs'), del = commandState(run, delCmd), mark = commandState(run, 'mark-syncs-fail')
   const mine = fetching.mine && ofTab(run)
@@ -65,13 +74,13 @@ export function FailedView({ fs: failed, other, conn: focus, find, run, now, rea
   const last = (ofTab(run) ? fetching.last : undefined) ?? (canDelete ? del.last : undefined) ?? (status === 'OTHER' ? mark.last : undefined)
   // A clean fetch is already said by "updated 2m ago"; the pill only shows a failed run or a write's result.
   const st = last && (writes.includes(last.command) || !runOk(last)) ? runStatus(last, now) : undefined
-  const exit = () => { setSelecting(false); sel.clear(); setConfirming(false); setCopied(false); setCopyErr('') }
+  const exit = () => { setSelecting(false); sel.clear(); setConfirming(false); setCopied(false); setCopyErr(''); setBatch(0) }
   const copy = () => navigator.clipboard.writeText(syncMarkdown(selected)).then(
     () => { setCopyErr(''); setCopied(true); setTimeout(() => setCopied(false), 1600) }, e => setCopyErr(`Could not copy: ${(e as Error).message}`))
   // Double-click a card: select mode with just it picked. Its x: the same, straight to the delete confirm.
   const pickOne = (r: Row) => { sel.clear(); sel.toggle(r.id); setSelecting(true) }
   const deleteOne = (r: Row) => { pickOne(r); setConfirming('delete') }
-  const one = canDelete ? { onPick: pickOne, onDelete: deleteOne } : {}
+  const one = canDelete ? { onPick: pickOne, onDelete: deleteOne } : { onPick: pickOne }
   // A finished delete or mark: its rows left this tab, so leave select mode.
   useEffect(() => { if ((last?.command === delCmd && del.ok) || (last?.command === 'mark-syncs-fail' && mark.ok)) exit() }, [last?.id])
 
@@ -91,7 +100,7 @@ export function FailedView({ fs: failed, other, conn: focus, find, run, now, rea
         options={SYNC_STATUSES.map(k => [k, counts[k] ? `${LABEL[k]} ${counts[k]!.rows.length}` : LABEL[k]] as const)} />
       <RunBar running={mine || deleting || marking} onCancel={cancel}
         text={deleting ? `Deleting on ${ENV_NAME}… approve it in Tabularis` : marking ? `Marking as FAIL on ${ENV_NAME}… approve it in Tabularis` : mine ? `Fetching ${LABEL[status]}…`
-          : selecting ? (status === 'FAIL' ? 'Pick the failures to delete' : 'Pick sync requests') : fs?.at ? `${n} ${what} · updated ${ago(fs.at, now)}` : 'Not fetched yet'}
+          : selecting ? (status === 'FAIL' ? 'Pick failures' : 'Pick sync requests') : fs?.at ? `${n} ${what} · updated ${ago(fs.at, now)}` : 'Not fetched yet'}
         pill={st && !selecting ? { label: last?.summary ?? st.label, tone: st.tone } : undefined}
         tools={selecting ? <button className="btn ghost sm" onClick={exit}>Done</button>
           : !!pickable.length && <button className="btn ghost sm" onClick={() => setSelecting(true)}><Icon d="check" size={13} />Select</button>}
@@ -138,20 +147,26 @@ export function FailedView({ fs: failed, other, conn: focus, find, run, now, rea
                 busy={del.busy} waiting={deleting} onCancel={() => setConfirming(false)} onOk={() => exec(delCmd, { env: ENV, ids: selected.map(r => r.id).join(',') })} />
             : <>
                 <SelectionRow sel={sel}>
-                  <button className="btn danger sm" disabled={!selected.length} onClick={() => setConfirming('delete')}>
-                    <Icon d="trash" size={13} />Delete{selected.length ? ` ${selected.length}` : ''}
-                  </button>
+                  {canDelete && (
+                    <button className="btn danger sm" disabled={!selected.length} onClick={() => setConfirming('delete')}>
+                      <Icon d="trash" size={13} />Delete{selected.length ? ` ${selected.length}` : ''}
+                    </button>
+                  )}
                 </SelectionRow>
-                {status === 'OTHER' && (
-                  <div className="bulk-actions">
+                <div className="bulk-actions">
+                  <button className="btn primary sm" disabled={!urls.length} onClick={openAll}
+                    title={urls.length > MAX_TABS ? `${MAX_TABS} tabs at a time; click again for the next ones` : 'Opens each connection in a background tab'}>
+                    <Icon d="external" size={13} />{urls.length <= MAX_TABS ? `Open all${urls.length ? ` ${urls.length}` : ''} in Refit` : `Open ${from + 1}-${from + chunk.length} of ${urls.length} in Refit`}
+                  </button>
+                  {status === 'OTHER' && <>
                     <button className="btn ghost sm" disabled={!selected.length} onClick={copy} title="One [name](link): MM-DD ~ MM-DD line per sync request">
                       <Icon d={copied ? 'check' : 'copy'} size={13} />{copied ? 'Copied' : 'Copy Markdown'}
                     </button>
                     <button className="btn ghost sm" disabled={!selected.length} onClick={() => setConfirming('fail')}>
                       <Icon d="alert" size={13} />Mark all as FAIL
                     </button>
-                  </div>
-                )}
+                  </>}
+                </div>
                 {copyErr && <p className="bulk-note" data-tone="fail">{copyErr}</p>}
               </>}
         </div>

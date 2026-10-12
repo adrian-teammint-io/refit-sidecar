@@ -11,9 +11,10 @@ import { HostSetup, hostProblem, hostLabel } from '../shared/HostSetup'
 import { PopupSettings } from './PopupSettings'
 import { AddToGroup } from './AddToGroup'
 import { PopupSearch } from './Search'
+import { PopupFailed } from './Failed'
 import { useEnvData, useTab } from './tab'
 
-// Toolbar popup: the groups (on a Refit connection page, a click adds it to one); search connections and open one in Refit. Both on
+// Toolbar popup: the groups (on a Refit connection page, a click adds it to one); the FAIL sync requests with Open all; search connections and open one in Refit. Both on
 // the current tab's environment. The toolbar icon still shows the FAIL count (background.ts), from the drawer's fetches.
 function Popup() {
   const { settings, host, run, loaded } = useStore()
@@ -42,6 +43,7 @@ function Popup() {
       {view === 'settings' ? <PopupSettings settings={settings} dark={dark} host={host} onChange={s => saveSettings(settings, s)} /> : <>
         {!loaded || !tab.ready ? null : hostProblem(host) ? <HostSetup host={host} compact /> : <>
           <AddToGroup page={tab.page} env={tab.env} d={data} run={run} ready={ready} />
+          <PopupFailed env={tab.env} data={data} run={run} ready={ready} />
           <PopupSearch env={tab.env} data={data} run={run} ready={ready} />
         </>}
         <footer className="p-foot muted">

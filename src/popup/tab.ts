@@ -7,7 +7,7 @@ import { parseConnectionPage } from '../links'
 import type { Data } from '../shared/store'
 
 export type TabPage = NonNullable<ReturnType<typeof parseConnectionPage>>
-export const DATA = ['groups', 'connections', 'projectConnections', 'projects', 'pins'] as const
+export const DATA = ['failedSyncs', 'groups', 'connections', 'projectConnections', 'projects', 'pins'] as const
 export type TabData = Pick<Data, typeof DATA[number]>
 
 export function useTab(): { ready: boolean; env: Env; page?: TabPage } {
